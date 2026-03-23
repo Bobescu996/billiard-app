@@ -1,4 +1,4 @@
-import { GAME_OPTIONS, TYPE_LABELS } from './config.js';
+import { DEFAULT_REPEAT_STATE, GAME_OPTIONS, TYPE_LABELS } from './config.js';
 import { state } from './state.js';
 import { refs } from './dom.js';
 import {
@@ -88,6 +88,10 @@ function updateTimerModeUI() {
   setActiveSegment(refs.timerModeSegments, (segment) => segment.dataset.mode === state.timerMode);
 }
 
+function updateStopButtonLabel() {
+  refs.stopBtn.textContent = state.type === 'time' ? 'Завершить партию' : 'Стоп';
+}
+
 function hasUnsavedProgress() {
   return (
     state.timerRunning ||
@@ -139,6 +143,8 @@ function persistSession() {
 
     frameRows: state.frameRows,
     pendingSetResult: state.pendingSetResult,
+    setScore1: refs.setScore1.value === '' ? '' : Math.max(0, Number(refs.setScore1.value)),
+    setScore2: refs.setScore2.value === '' ? '' : Math.max(0, Number(refs.setScore2.value)),
     repeatState: state.repeatState
   };
 
@@ -149,6 +155,8 @@ function persistSession() {
     session.type ||
     session.frameRows.length > 0 ||
     session.pendingSetResult ||
+    session.setScore1 !== '' ||
+    session.setScore2 !== '' ||
     session.timerRunning ||
     session.timerPaused ||
     session.timerFinished ||
@@ -228,6 +236,8 @@ function updateTimerDisplay() {
 }
 
 function updateTimerCardState() {
+  updateStopButtonLabel();
+
   const canUse = getCanUseTimer();
 
   refs.timerCard.classList.toggle('is-disabled', !canUse);
@@ -254,10 +264,21 @@ function updateTimerCardState() {
   if (state.timerRunning) {
     refs.startPauseBtn.textContent = 'Пауза';
     refs.startPauseBtn.className = 'btn btn-warning btn-lg';
-    refs.timerHint.textContent =
-      state.timerMode === 'countdown' ? 'Идёт обратный отсчёт.' : 'Секундомер запущен.';
-    refs.timerStatusBadge.textContent = 'В работе';
-    refs.timerStatusBadge.className = 'badge badge-success';
+
+    if (state.type === 'time') {
+      refs.timerHint.textContent = state.timeExpired
+        ? 'Основное время закончилось. Доиграйте текущую партию.'
+        : 'Идёт общее время встречи.';
+      refs.timerStatusBadge.textContent = state.timeExpired ? 'Время вышло' : 'В работе';
+      refs.timerStatusBadge.className = state.timeExpired
+        ? 'badge badge-danger'
+        : 'badge badge-success';
+    } else {
+      refs.timerHint.textContent =
+        state.timerMode === 'countdown' ? 'Идёт обратный отсчёт.' : 'Секундомер запущен.';
+      refs.timerStatusBadge.textContent = 'В работе';
+      refs.timerStatusBadge.className = 'badge badge-success';
+    }
   } else if (state.timerPaused) {
     refs.startPauseBtn.textContent = 'Продолжить';
     refs.startPauseBtn.className = 'btn btn-primary btn-lg';
@@ -348,6 +369,7 @@ function resetMatchState({ keepInputs = false } = {}) {
   state.accumulatedElapsed = 0;
   state.frameRows = [];
   state.pendingSetResult = null;
+  state.timeExpired = false;
 
   resetResultsUI();
   updateTimerDisplay();
@@ -381,6 +403,7 @@ function resetOnlyTime() {
   state.timerStartedAt = null;
   state.accumulatedElapsed = 0;
   state.remainingSeconds = state.timerMode === 'countdown' ? state.timeDuration || 0 : 0;
+  state.timeExpired = false;
 
   updateTimerDisplay();
   updateTimerCardState();
@@ -440,30 +463,54 @@ function renderStatistics() {
   state.statistics.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'stats-item';
-    card.innerHTML = `
-      <div class="stats-item-top">
-        <div>
-          <div class="stats-players">${item.players}</div>
-          <div class="stats-date">${item.date}</div>
-        </div>
-        <span class="badge badge-accent">${item.type}</span>
-      </div>
 
-      <div class="stats-meta">
-        <div class="stats-meta-block">
-          <span class="stats-meta-label">Игра</span>
-          <span class="stats-meta-value">${item.game}</span>
-        </div>
-        <div class="stats-meta-block">
-          <span class="stats-meta-label">Счёт</span>
-          <span class="stats-meta-value">${item.score}</span>
-        </div>
-        <div class="stats-meta-block">
-          <span class="stats-meta-label">Дополнительно</span>
-          <span class="stats-meta-value">${item.extra || '—'}</span>
-        </div>
-      </div>
-    `;
+    const top = document.createElement('div');
+    top.className = 'stats-item-top';
+
+    const topInfo = document.createElement('div');
+
+    const players = document.createElement('div');
+    players.className = 'stats-players';
+    players.textContent = item.players;
+
+    const date = document.createElement('div');
+    date.className = 'stats-date';
+    date.textContent = item.date;
+
+    topInfo.append(players, date);
+
+    const typeBadge = document.createElement('span');
+    typeBadge.className = 'badge badge-accent';
+    typeBadge.textContent = item.type;
+
+    top.append(topInfo, typeBadge);
+
+    const meta = document.createElement('div');
+    meta.className = 'stats-meta';
+
+    const createMetaBlock = (label, value) => {
+      const block = document.createElement('div');
+      block.className = 'stats-meta-block';
+
+      const labelEl = document.createElement('span');
+      labelEl.className = 'stats-meta-label';
+      labelEl.textContent = label;
+
+      const valueEl = document.createElement('span');
+      valueEl.className = 'stats-meta-value';
+      valueEl.textContent = value;
+
+      block.append(labelEl, valueEl);
+      return block;
+    };
+
+    meta.append(
+      createMetaBlock('Игра', item.game),
+      createMetaBlock('Счёт', item.score),
+      createMetaBlock('Дополнительно', item.extra || '—')
+    );
+
+    card.append(top, meta);
     list.appendChild(card);
   });
 }
@@ -497,24 +544,19 @@ function createStatisticsEntry(payload) {
 
 function startRunningLoop() {
   clearTimerInterval();
+
   state.timerInterval = setInterval(() => {
     syncElapsedValuesFromTimestamp();
     updateTimerDisplay();
-    persistSession();
 
-    if (state.timerMode === 'countdown' && state.remainingSeconds <= 0) {
-      clearTimerInterval();
-      state.timerRunning = false;
-      state.timerPaused = false;
-      state.timerFinished = true;
-      state.currentLapTime = state.timeDuration || 0;
-      state.timerStartedAt = null;
-      state.accumulatedElapsed = state.timeDuration || 0;
-      updateTimerDisplay();
-      updateTimerCardState();
-      persistSession();
-      handleStop(true);
+    if (state.type === 'time' && state.remainingSeconds <= 0 && !state.timeExpired) {
+      state.remainingSeconds = 0;
+      state.timeExpired = true;
+      showToast('Время закончилось. Доиграйте текущую партию.');
     }
+
+    updateTimerCardState();
+    persistSession();
   }, 1000);
 }
 
@@ -524,17 +566,21 @@ function startTimer() {
     return;
   }
 
-  if (state.timerFinished) {
-    resetOnlyTime();
+  if (state.type === 'time' && state.timeExpired) {
+    showToast('Основное время уже закончилось. Новую партию начинать нельзя.');
+    return;
   }
 
-  if (state.timerMode === 'countdown' && state.remainingSeconds <= 0) {
+  if (state.timerFinished) {
+    state.timerFinished = false;
+  }
+
+  if (state.timerMode === 'countdown' && state.remainingSeconds <= 0 && !state.timeExpired) {
     state.remainingSeconds = state.timeDuration || 0;
   }
 
   state.timerRunning = true;
   state.timerPaused = false;
-  state.timerFinished = false;
   state.timerStartedAt = Date.now();
 
   refs.inputCard.classList.remove('is-active');
@@ -608,32 +654,40 @@ function renderFrameRows() {
     const p2Class =
       row.completed && row.score2 > row.score1 ? 'input-score is-winner' : 'input-score';
 
-    rowElement.innerHTML = `
-      <div class="result-row-number">${row.partyNumber}</div>
-      <div class="result-row-time">${formatTime(row.time)}</div>
-      <div class="score-cell">
-        <input
-          class="${p1Class}"
-          type="number"
-          min="0"
-          inputmode="numeric"
-          data-row-index="${index}"
-          data-player="1"
-          ${row.score1 !== '' ? 'value="' + row.score1 + '"' : ''}
-        />
-      </div>
-      <div class="score-cell">
-        <input
-          class="${p2Class}"
-          type="number"
-          min="0"
-          inputmode="numeric"
-          data-row-index="${index}"
-          data-player="2"
-          ${row.score2 !== '' ? 'value="' + row.score2 + '"' : ''}
-        />
-      </div>
-    `;
+    const numberEl = document.createElement('div');
+    numberEl.className = 'result-row-number';
+    numberEl.textContent = String(row.partyNumber);
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'result-row-time';
+    timeEl.textContent = formatTime(row.time);
+
+    const createScoreCell = (player, className, value) => {
+      const scoreCell = document.createElement('div');
+      scoreCell.className = 'score-cell';
+
+      const input = document.createElement('input');
+      input.className = className;
+      input.type = 'number';
+      input.min = '0';
+      input.inputMode = 'numeric';
+      input.dataset.rowIndex = String(index);
+      input.dataset.player = player;
+
+      if (value !== '') {
+        input.value = String(value);
+      }
+
+      scoreCell.appendChild(input);
+      return scoreCell;
+    };
+
+    rowElement.append(
+      numberEl,
+      timeEl,
+      createScoreCell('1', p1Class, row.score1),
+      createScoreCell('2', p2Class, row.score2)
+    );
 
     refs.frameRows.appendChild(rowElement);
   });
@@ -658,8 +712,8 @@ function updateFrameSummary() {
   state.frameRows.forEach((row) => {
     if (!row.completed) return;
 
-    balls1 += row.score1;
-    balls2 += row.score2;
+    balls1 += Number(row.score1);
+    balls2 += Number(row.score2);
 
     if (row.score1 > row.score2) wins1 += 1;
     if (row.score2 > row.score1) wins2 += 1;
@@ -668,6 +722,23 @@ function updateFrameSummary() {
   refs.winsSummary.textContent = wins1 + ' : ' + wins2;
   refs.ballsSummary.textContent = balls1 + ' : ' + balls2;
   refs.targetSummary.textContent = getTargetLabel();
+  refs.currentPartyBadge.textContent = 'Текущая партия: ' + (state.frameRows.length || 1);
+
+  if (state.type === 'time') {
+    refs.frameStatusSummary.textContent = state.timeExpired ? 'время вышло' : 'в процессе';
+
+    const currentRow = state.frameRows[state.frameRows.length - 1];
+    const canStartNext = Boolean(currentRow && currentRow.completed && !state.timeExpired);
+
+    refs.nextPartyBtn.classList.remove('hidden');
+    refs.nextPartyBtn.textContent = state.timeExpired
+      ? 'Время закончилось'
+      : 'Начать следующую партию';
+    refs.nextPartyBtn.disabled = !canStartNext;
+
+    refs.saveFrameBtn.disabled = !canSaveFrame();
+    return;
+  }
 
   const targetReached = state.frameTarget
     ? state.frameTarget.kind === 'wins'
@@ -676,14 +747,15 @@ function updateFrameSummary() {
     : false;
 
   refs.frameStatusSummary.textContent = targetReached ? 'условие достигнуто' : 'в процессе';
+  refs.nextPartyBtn.classList.remove('hidden');
+  refs.nextPartyBtn.textContent = 'Начать следующую партию';
   refs.nextPartyBtn.disabled = !canProceedToNextParty();
   refs.saveFrameBtn.disabled = !canSaveFrame();
-  refs.currentPartyBadge.textContent = 'Текущая партия: ' + (state.frameRows.length || 1);
 }
 
 function openFrameResult(lapTime) {
   refs.frameCardTitle.textContent =
-    state.type === 'time' ? 'Результат игры на время' : 'Результат встречи';
+    state.type === 'time' ? 'Результаты встречи на время' : 'Результат встречи';
 
   refs.frameMetaText.textContent =
     getGameLabel() + ' · ' + TYPE_LABELS[state.type] + ' · ' + getTargetLabel();
@@ -693,22 +765,11 @@ function openFrameResult(lapTime) {
   refs.frameResultCard.classList.add('is-active');
   refs.setResultCard.classList.add('hidden');
 
-  if (state.type === 'time') {
-    state.frameRows = [
-      {
-        partyNumber: 1,
-        time: lapTime,
-        score1: '',
-        score2: '',
-        completed: false
-      }
-    ];
-    refs.nextPartyBtn.classList.add('hidden');
-    refs.currentPartyBadge.textContent = 'Финальный результат';
-  } else if (
+  const shouldAddNewRow =
     state.frameRows.length === 0 ||
-    state.frameRows[state.frameRows.length - 1].completed
-  ) {
+    state.frameRows[state.frameRows.length - 1].completed;
+
+  if (shouldAddNewRow) {
     state.frameRows.push({
       partyNumber: state.frameRows.length + 1,
       time: lapTime,
@@ -716,8 +777,10 @@ function openFrameResult(lapTime) {
       score2: '',
       completed: false
     });
-    refs.nextPartyBtn.classList.remove('hidden');
   }
+
+  refs.nextPartyBtn.classList.remove('hidden');
+  refs.nextPartyBtn.textContent = 'Начать следующую партию';
 
   renderFrameRows();
   updateFrameSummary();
@@ -741,9 +804,17 @@ function handleStop(isAutomatic = false) {
     state.accumulatedElapsed = state.elapsedSeconds;
   }
 
-  const lapTime = state.timerMode === 'countdown'
-    ? (state.timeDuration || 0) - state.remainingSeconds
-    : state.elapsedSeconds;
+  let lapTime;
+
+  if (state.type === 'time') {
+    const previousLapSum = state.frameRows.reduce((sum, row) => sum + row.time, 0);
+    lapTime = state.elapsedSeconds - previousLapSum;
+  } else {
+    lapTime =
+      state.timerMode === 'countdown'
+        ? (state.timeDuration || 0) - state.remainingSeconds
+        : state.elapsedSeconds;
+  }
 
   state.currentLapTime = Math.max(0, lapTime);
   state.timerFinished = true;
@@ -759,7 +830,7 @@ function handleStop(isAutomatic = false) {
   }
 
   if (isAutomatic && state.type === 'time') {
-    showToast('Время истекло. Заполните итоговый результат.');
+    showToast('Время закончилось. Доиграйте текущую партию.');
   }
 
   persistSession();
@@ -845,10 +916,7 @@ function saveFrameResult() {
     if (row.score2 > row.score1) wins2 += 1;
   });
 
-  const scoreText =
-    state.type === 'frame'
-      ? wins1 + ':' + wins2 + ' (' + balls1 + ':' + balls2 + ')'
-      : balls1 + ':' + balls2;
+  const scoreText = wins1 + ':' + wins2 + ' (' + balls1 + ':' + balls2 + ')';
 
   createStatisticsEntry({
     players: state.player1 + ' vs ' + state.player2,
@@ -877,6 +945,31 @@ function saveFrameResult() {
 }
 
 function handleNextParty() {
+  if (state.type === 'time') {
+    const currentRow = state.frameRows[state.frameRows.length - 1];
+
+    if (!currentRow || !currentRow.completed) {
+      refs.frameResultError.textContent = 'Сначала заполните текущую партию.';
+      return;
+    }
+
+    if (state.timeExpired) {
+      refs.frameResultError.textContent =
+        'Основное время закончилось. Новую партию начинать нельзя.';
+      return;
+    }
+
+    refs.frameResultError.textContent = '';
+    refs.frameResultCard.classList.remove('is-active');
+    refs.frameResultCard.classList.add('is-disabled');
+    state.timerFinished = false;
+    refs.timerCard.classList.add('is-active');
+    refs.timerCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    persistSession();
+    startTimer();
+    return;
+  }
+
   if (!canProceedToNextParty()) {
     refs.frameResultError.textContent = 'Сначала заполните текущую партию.';
     return;
@@ -885,7 +978,6 @@ function handleNextParty() {
   refs.frameResultError.textContent = '';
   refs.frameResultCard.classList.remove('is-active');
   refs.frameResultCard.classList.add('is-disabled');
-
   state.timerFinished = false;
   state.timerPaused = false;
   state.timerRunning = false;
@@ -964,41 +1056,207 @@ function handleGameChange(game) {
   persistSession();
 }
 
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sanitizeText(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function sanitizeNonNegativeNumber(value, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function sanitizeGame(value) {
+  return typeof value === 'string' && GAME_OPTIONS[value] ? value : null;
+}
+
+function sanitizeType(value, game) {
+  if (typeof value !== 'string' || !TYPE_LABELS[value]) return null;
+  if (game && !GAME_OPTIONS[game].allowedTypes.includes(value)) return null;
+  return value;
+}
+
+function sanitizeFrameTarget(value, type) {
+  if (type !== 'frame' || !isPlainObject(value)) return null;
+  const kind = value.kind === 'wins' || value.kind === 'points' ? value.kind : null;
+  const targetValue =
+    typeof value.value === 'number' && Number.isFinite(value.value) && value.value > 0
+      ? value.value
+      : null;
+
+  if (!kind || targetValue === null) return null;
+  return { kind, value: targetValue };
+}
+
+function sanitizeTimeDuration(value, type) {
+  if (type !== 'time') return null;
+  return sanitizeNonNegativeNumber(value, 0) || null;
+}
+
+function sanitizeScoreValue(value) {
+  if (value === '') return '';
+  return sanitizeNonNegativeNumber(value, null);
+}
+
+function sanitizeFrameRows(value, type) {
+  if ((type !== 'frame' && type !== 'time') || !Array.isArray(value)) return [];
+
+  return value
+    .filter((row) => isPlainObject(row))
+    .map((row, index) => {
+      const score1 = sanitizeScoreValue(row.score1);
+      const score2 = sanitizeScoreValue(row.score2);
+
+      if (score1 === null || score2 === null) return null;
+
+      return {
+        partyNumber: sanitizeNonNegativeNumber(row.partyNumber, index + 1) || index + 1,
+        time: sanitizeNonNegativeNumber(row.time, 0),
+        score1,
+        score2,
+        completed: score1 !== '' && score2 !== ''
+      };
+    })
+    .filter(Boolean);
+}
+
+function sanitizePendingSetResult(value, type) {
+  if (type !== 'set' || !isPlainObject(value)) return null;
+  return {
+    time: sanitizeNonNegativeNumber(value.time, 0)
+  };
+}
+
+function sanitizeRepeatState(value) {
+  if (!isPlainObject(value)) {
+    return { ...DEFAULT_REPEAT_STATE };
+  }
+
+  const game = sanitizeGame(value.game);
+  const type = sanitizeType(value.type, game);
+
+  return {
+    player1: sanitizeText(value.player1),
+    player2: sanitizeText(value.player2),
+    game,
+    type,
+    frameTarget: sanitizeFrameTarget(value.frameTarget, type),
+    timeDuration: sanitizeTimeDuration(value.timeDuration, type)
+  };
+}
+
 function restoreSession() {
   const saved = loadSession();
-  if (!saved) return;
+  if (!isPlainObject(saved)) {
+    clearSessionStorage();
+    return;
+  }
 
-  refs.player1Input.value = saved.player1 || '';
-  refs.player2Input.value = saved.player2 || '';
+  const player1 = sanitizeText(saved.player1);
+  const player2 = sanitizeText(saved.player2);
+  const game = sanitizeGame(saved.game);
+  const type = sanitizeType(saved.type, game);
+  const frameTarget = sanitizeFrameTarget(saved.frameTarget, type);
+  const timeDuration = sanitizeTimeDuration(saved.timeDuration, type);
 
-  state.game = saved.game || null;
-  state.type = saved.type || null;
-  state.frameTarget = saved.frameTarget || null;
-  state.timeDuration = saved.timeDuration || null;
+  const timerMode =
+    type === 'time'
+      ? 'countdown'
+      : saved.timerMode === 'countdown' || saved.timerMode === 'stopwatch'
+        ? saved.timerMode
+        : 'stopwatch';
 
-  state.timerMode = saved.timerMode || 'stopwatch';
-  state.timerRunning = !!saved.timerRunning;
-  state.timerPaused = !!saved.timerPaused;
-  state.timerFinished = !!saved.timerFinished;
+  const elapsedSeconds = sanitizeNonNegativeNumber(saved.elapsedSeconds, 0);
+  const currentLapTime = sanitizeNonNegativeNumber(saved.currentLapTime, 0);
+  const accumulatedElapsed = sanitizeNonNegativeNumber(saved.accumulatedElapsed, 0);
+  const timerStartedAt =
+    typeof saved.timerStartedAt === 'number' && Number.isFinite(saved.timerStartedAt)
+      ? saved.timerStartedAt
+      : null;
 
-  state.elapsedSeconds = saved.elapsedSeconds || 0;
-  state.remainingSeconds = saved.remainingSeconds || 0;
-  state.currentLapTime = saved.currentLapTime || 0;
+  const frameRows = sanitizeFrameRows(saved.frameRows, type);
+  const pendingSetResult = sanitizePendingSetResult(saved.pendingSetResult, type);
+  const setScore1 = sanitizeScoreValue(saved.setScore1);
+  const setScore2 = sanitizeScoreValue(saved.setScore2);
+  const repeatState = sanitizeRepeatState(saved.repeatState);
 
-  state.timerStartedAt = saved.timerStartedAt || null;
-  state.accumulatedElapsed = saved.accumulatedElapsed || 0;
+  let timerRunning = Boolean(saved.timerRunning);
+  let timerPaused = Boolean(saved.timerPaused);
+  let timerFinished = Boolean(saved.timerFinished);
 
-  state.frameRows = Array.isArray(saved.frameRows) ? saved.frameRows : [];
-  state.pendingSetResult = saved.pendingSetResult || null;
-  state.repeatState = saved.repeatState || state.repeatState;
+  if (!type) {
+    timerRunning = false;
+    timerPaused = false;
+    timerFinished = false;
+  }
+
+  if (timerRunning && !timerStartedAt) {
+    timerRunning = false;
+    timerPaused = true;
+  }
+
+  if (timerRunning && timerFinished) {
+    timerFinished = false;
+  }
+
+  let remainingSeconds;
+  if (timerMode === 'countdown') {
+    const safeDuration = timeDuration || 0;
+    remainingSeconds = Math.max(0, safeDuration - elapsedSeconds);
+  } else {
+    remainingSeconds = sanitizeNonNegativeNumber(saved.remainingSeconds, 0);
+  }
+
+  refs.player1Input.value = player1;
+  refs.player2Input.value = player2;
+
+  state.game = game;
+  state.type = type;
+  state.frameTarget = frameTarget;
+  state.timeDuration = timeDuration;
+
+  state.timerMode = timerMode;
+  state.timerRunning = timerRunning;
+  state.timerPaused = timerPaused;
+  state.timerFinished = timerFinished;
+
+  state.elapsedSeconds = elapsedSeconds;
+  state.remainingSeconds = remainingSeconds;
+  state.currentLapTime = currentLapTime;
+
+  state.timerStartedAt = timerStartedAt;
+  state.accumulatedElapsed = accumulatedElapsed;
+
+  state.frameRows = frameRows;
+  state.pendingSetResult = pendingSetResult;
+  state.repeatState = repeatState;
+  state.timeExpired = type === 'time' && timerMode === 'countdown' && remainingSeconds <= 0;
+
+  const hasRestoredData =
+    player1 ||
+    player2 ||
+    game ||
+    type ||
+    frameRows.length > 0 ||
+    pendingSetResult ||
+    setScore1 !== '' ||
+    setScore2 !== '' ||
+    timerRunning ||
+    timerPaused ||
+    timerFinished ||
+    elapsedSeconds > 0 ||
+    remainingSeconds > 0;
+
+  if (!hasRestoredData) {
+    clearSessionStorage();
+    return;
+  }
 
   updateGameSelectionUI();
   updateTypeAvailability();
   updateTypeSelectionUI();
-
-  if (state.type === 'time') {
-    state.timerMode = 'countdown';
-  }
 
   if (state.timerRunning && state.timerStartedAt) {
     syncElapsedValuesFromTimestamp();
@@ -1023,6 +1281,8 @@ function restoreSession() {
     refs.setPlayer1Label.textContent = state.player1;
     refs.setPlayer2Label.textContent = state.player2;
     refs.setRowTime.textContent = formatTime(state.pendingSetResult.time);
+    refs.setScore1.value = setScore1 === '' ? '' : String(setScore1);
+    refs.setScore2.value = setScore2 === '' ? '' : String(setScore2);
     refs.setResultCard.classList.remove('hidden', 'is-disabled');
   }
 
@@ -1039,6 +1299,7 @@ function restoreSession() {
   updateTimerDisplay();
   updateTimerCardState();
 
+  persistSession();
   showToast('Незавершённая сессия восстановлена.');
 }
 

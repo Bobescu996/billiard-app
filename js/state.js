@@ -24,5 +24,7 @@ export const state = {
   frameRows: [],
   pendingSetResult: null,
   statistics: [],
-  repeatState: { ...DEFAULT_REPEAT_STATE }
+  repeatState: { ...DEFAULT_REPEAT_STATE },
+
+  timeExpired: false
 };

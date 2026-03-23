@@ -335,6 +335,15 @@ button {
   padding: 12px 20px;
   font-size: 15px;
 }
+.btn-success {
+  background: #22c55e;
+  color: black;
+  border: none;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+}
 
 .timer-display {
   min-width: 100%;
