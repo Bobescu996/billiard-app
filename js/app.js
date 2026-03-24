@@ -820,6 +820,7 @@ function updateFrameSummary() {
     const canStartNext = Boolean(currentRow && currentRow.completed && !state.timeExpired);
 
     refs.nextPartyBtn.classList.remove('hidden');
+    refs.nextPartyBtn.className = 'btn btn-primary btn-lg';
     refs.nextPartyBtn.textContent = state.timeExpired
       ? 'Время закончилось'
       : 'Начать следующую партию';
@@ -837,7 +838,10 @@ function updateFrameSummary() {
 
   refs.frameStatusSummary.textContent = targetReached ? 'условие достигнуто' : 'в процессе';
   refs.nextPartyBtn.classList.remove('hidden');
-  refs.nextPartyBtn.textContent = 'Начать следующую партию';
+  refs.nextPartyBtn.className = targetReached ? 'btn btn-warning btn-lg' : 'btn btn-primary btn-lg';
+  refs.nextPartyBtn.textContent = targetReached
+    ? 'Встреча закончена'
+    : 'Начать следующую партию';
   refs.nextPartyBtn.disabled = !canProceedToNextParty();
   refs.saveFrameBtn.disabled = !canSaveFrame();
 }
@@ -869,6 +873,7 @@ function openFrameResult(lapTime) {
   }
 
   refs.nextPartyBtn.classList.remove('hidden');
+  refs.nextPartyBtn.className = 'btn btn-primary btn-lg';
   refs.nextPartyBtn.textContent = 'Начать следующую партию';
 
   renderFrameRows();
@@ -925,10 +930,33 @@ function handleStop(isAutomatic = false) {
   persistSession();
 }
 
+function isFrameTargetReached() {
+  if (state.type !== 'frame' || !state.frameTarget) return false;
+
+  let wins1 = 0;
+  let wins2 = 0;
+  let balls1 = 0;
+  let balls2 = 0;
+
+  state.frameRows.forEach((row) => {
+    if (!row.completed) return;
+
+    balls1 += Number(row.score1);
+    balls2 += Number(row.score2);
+
+    if (row.score1 > row.score2) wins1 += 1;
+    if (row.score2 > row.score1) wins2 += 1;
+  });
+
+  return state.frameTarget.kind === 'wins'
+    ? wins1 >= state.frameTarget.value || wins2 >= state.frameTarget.value
+    : balls1 >= state.frameTarget.value || balls2 >= state.frameTarget.value;
+}
+
 function canProceedToNextParty() {
   if (state.type !== 'frame' || state.frameRows.length === 0) return false;
   const currentRow = state.frameRows[state.frameRows.length - 1];
-  return currentRow.completed;
+  return currentRow.completed && !isFrameTargetReached();
 }
 
 function canSaveFrame() {
