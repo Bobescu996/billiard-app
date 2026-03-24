@@ -1,5 +1,6 @@
 const STATS_STORAGE_KEY = 'billiards-statistics-v1';
 const SESSION_STORAGE_KEY = 'billiards-current-session-v1';
+const STATS_SYNC_QUEUE_KEY = 'billiards-statistics-sync-queue-v1';
 
 export function loadStatistics() {
   try {
@@ -53,5 +54,25 @@ export function clearSessionStorage() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch (error) {
     console.error('Ошибка очистки сессии в localStorage:', error);
+  }
+}
+
+export function loadStatisticsSyncQueue() {
+  try {
+    const raw = localStorage.getItem(STATS_SYNC_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Ошибка чтения очереди синхронизации статистики:', error);
+    return [];
+  }
+}
+
+export function saveStatisticsSyncQueue(queue) {
+  try {
+    localStorage.setItem(STATS_SYNC_QUEUE_KEY, JSON.stringify(queue));
+  } catch (error) {
+    console.error('Ошибка записи очереди синхронизации статистики:', error);
   }
 }

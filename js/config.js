@@ -39,3 +39,10 @@ export const DEFAULT_REPEAT_STATE = {
   frameTarget: null,
   timeDuration: null
 };
+
+export const GOOGLE_SHEETS_SYNC = {
+  enabled: true,
+  endpoint: 'https://script.google.com/macros/s/AKfycbyzd5bKYRngHIqEMxf_hIwf5fTozEILCUKMj7xzRzoKFqjOPU32IRESGuSCmbzYsb05Wg/exec',
+  apiKey: 'billiard-stats-2026',
+  requestTimeoutMs: 10000
+};

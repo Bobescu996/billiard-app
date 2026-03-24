@@ -17,6 +17,7 @@ import {
   saveSession,
   clearSessionStorage
 } from './storage.js';
+import { enqueueStatisticsSync, syncPendingStatistics } from './sync.js';
 
 function clearTimerInterval() {
   if (state.timerInterval) {
@@ -602,6 +603,10 @@ function openGameScreen() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function createEntryId() {
+  return 'stat-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+}
+
 function createStatisticsEntry(payload) {
   const now = new Date();
   const date =
@@ -611,9 +616,19 @@ function createStatisticsEntry(payload) {
     '.' +
     now.getFullYear();
 
-  state.statistics.unshift({ date, ...payload });
+  const entry = {
+    id: createEntryId(),
+    createdAt: now.toISOString(),
+    date,
+    ...payload
+  };
+
+  state.statistics.unshift(entry);
   saveStatistics(state.statistics);
   renderStatistics();
+
+  enqueueStatisticsSync(entry);
+  void syncPendingStatistics();
 }
 
 function startRunningLoop() {
@@ -953,12 +968,28 @@ function saveSetResult() {
 
   refs.setResultError.textContent = '';
 
+  const setDuration = state.pendingSetResult ? state.pendingSetResult.time : 0;
+
   createStatisticsEntry({
     players: state.player1 + ' vs ' + state.player2,
+    player1: state.player1,
+    player2: state.player2,
     game: getGameLabel(),
+    gameKey: state.game,
     type: TYPE_LABELS[state.type],
+    typeKey: state.type,
     score: score1 + ':' + score2,
-    extra: 'Время ' + formatTime(state.pendingSetResult ? state.pendingSetResult.time : 0)
+    extra: 'Время ' + formatTime(setDuration),
+    score1,
+    score2,
+    wins1: score1 > score2 ? 1 : 0,
+    wins2: score2 > score1 ? 1 : 0,
+    balls1: score1,
+    balls2: score2,
+    frameCount: 1,
+    durationSeconds: setDuration,
+    targetKind: null,
+    targetValue: null
   });
 
   saveRepeatState();
@@ -991,13 +1022,28 @@ function saveFrameResult() {
   });
 
   const scoreText = wins1 + ':' + wins2 + ' (' + balls1 + ':' + balls2 + ')';
+  const totalDuration = state.frameRows.reduce((sum, row) => sum + Number(row.time || 0), 0);
 
   createStatisticsEntry({
     players: state.player1 + ' vs ' + state.player2,
+    player1: state.player1,
+    player2: state.player2,
     game: getGameLabel(),
+    gameKey: state.game,
     type: TYPE_LABELS[state.type],
+    typeKey: state.type,
     score: scoreText,
-    extra: getTargetLabel()
+    extra: getTargetLabel(),
+    score1: wins1,
+    score2: wins2,
+    wins1,
+    wins2,
+    balls1,
+    balls2,
+    frameCount: state.frameRows.length,
+    durationSeconds: totalDuration,
+    targetKind: state.type === 'frame' && state.frameTarget ? state.frameTarget.kind : null,
+    targetValue: state.type === 'frame' && state.frameTarget ? state.frameTarget.value : null
   });
 
   saveRepeatState();
@@ -1564,6 +1610,11 @@ function init() {
   updateTimerDisplay();
   updateTimerCardState();
   bindEvents();
+  void syncPendingStatistics();
+
+  window.addEventListener('online', () => {
+    void syncPendingStatistics();
+  });
 
   console.log(getStatisticsLatestText(state.statistics));
 }
