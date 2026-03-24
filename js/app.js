@@ -235,6 +235,77 @@ function updateTimerDisplay() {
   refs.timerDisplay.classList.toggle('is-finished', state.timerFinished);
 }
 
+function isMobileViewport() {
+  return window.innerWidth <= 768;
+}
+
+function isElementMostlyVisible(element) {
+  const rect = element.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+  return rect.top < viewportHeight * 0.7 && rect.bottom > viewportHeight * 0.3;
+}
+
+function animateWindowScrollTo(targetTop, duration = 520) {
+  const startTop = window.scrollY;
+  const distance = targetTop - startTop;
+
+  if (Math.abs(distance) < 4) {
+    window.scrollTo(0, targetTop);
+    return;
+  }
+
+  const startTime = performance.now();
+
+  function step(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    window.scrollTo(0, startTop + distance * progress);
+
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    }
+  }
+
+  window.requestAnimationFrame(step);
+}
+
+function scrollTimerCardIntoView() {
+  if (!isMobileViewport() || isElementMostlyVisible(refs.timerCard)) {
+    state.timerCardAutoScrolled = true;
+    return;
+  }
+
+  const rect = refs.timerCard.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const targetTop = window.scrollY + rect.top - Math.max(24, (viewportHeight - rect.height) / 2);
+
+  animateWindowScrollTo(Math.max(0, targetTop));
+
+  state.timerCardAutoScrolled = true;
+}
+
+function syncTimerCardAutoScroll(canUse) {
+  if (!canUse) {
+    state.timerCardAutoScrolled = false;
+    return;
+  }
+
+  if (
+    state.timerCardAutoScrolled ||
+    state.timerRunning ||
+    state.timerPaused ||
+    state.timerFinished ||
+    state.pendingSetResult ||
+    state.frameRows.length > 0
+  ) {
+    return;
+  }
+
+  scrollTimerCardIntoView();
+}
+
 function updateTimerCardState() {
   updateStopButtonLabel();
 
@@ -298,6 +369,8 @@ function updateTimerCardState() {
     refs.timerStatusBadge.textContent = 'Готов';
     refs.timerStatusBadge.className = 'badge badge-success';
   }
+
+  syncTimerCardAutoScroll(canUse);
 }
 
 function getGameLabel() {
@@ -370,6 +443,7 @@ function resetMatchState({ keepInputs = false } = {}) {
   state.frameRows = [];
   state.pendingSetResult = null;
   state.timeExpired = false;
+  state.timerCardAutoScrolled = false;
 
   resetResultsUI();
   updateTimerDisplay();
@@ -1233,6 +1307,7 @@ function restoreSession() {
   state.pendingSetResult = pendingSetResult;
   state.repeatState = repeatState;
   state.timeExpired = type === 'time' && timerMode === 'countdown' && remainingSeconds <= 0;
+  state.timerCardAutoScrolled = true;
 
   const hasRestoredData =
     player1 ||

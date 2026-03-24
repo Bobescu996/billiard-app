@@ -26,5 +26,6 @@ export const state = {
   statistics: [],
   repeatState: { ...DEFAULT_REPEAT_STATE },
 
-  timeExpired: false
+  timeExpired: false,
+  timerCardAutoScrolled: false
 };

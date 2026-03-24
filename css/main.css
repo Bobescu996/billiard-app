@@ -80,6 +80,15 @@ button {
   margin: 4px 0 0;
 }
 
+.header-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 5px;
+
+}
+
 .screen-subtitle {
   margin: 6px 0 0;
   color: var(--text-secondary);
@@ -141,11 +150,35 @@ button {
   margin-top: 16px;
 }
 
+#inputCard > .section + .section {
+  margin-top: 8px;
+}
+
 .label {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0;
+}
+
+#inputCard > .section > .label {
+  position: relative;
+  padding-left: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+#inputCard > .section > .label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 4px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: translateY(-50%);
 }
 
 .helper-text {
