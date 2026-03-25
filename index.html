@@ -28,11 +28,17 @@
           <p class="label">Игроки</p>
           <div class="players-row">
             <div>
-              <input class="input" id="player1Input" type="text" placeholder="Игрок 1" />
+              <div class="player-picker">
+                <input class="input" id="player1Input" type="text" placeholder="Игрок 1" autocomplete="off" />
+                <div class="player-picker-menu hidden" id="player1Suggestions"></div>
+              </div>
               <p class="helper-text player-lookup-status" id="player1LookupStatus"></p>
             </div>
             <div>
-              <input class="input" id="player2Input" type="text" placeholder="Игрок 2" />
+              <div class="player-picker">
+                <input class="input" id="player2Input" type="text" placeholder="Игрок 2" autocomplete="off" />
+                <div class="player-picker-menu hidden" id="player2Suggestions"></div>
+              </div>
               <p class="helper-text player-lookup-status" id="player2LookupStatus"></p>
             </div>
           </div>
@@ -285,12 +291,18 @@
           <div class="stats-filter-grid">
             <div class="section">
               <p class="label">Игрок 1</p>
-              <input class="input" id="statsPlayer1Input" type="text" placeholder="Введите имя игрока" />
+              <div class="player-picker">
+                <input class="input" id="statsPlayer1Input" type="text" placeholder="Введите имя игрока" autocomplete="off" />
+                <div class="player-picker-menu hidden" id="statsPlayer1Suggestions"></div>
+              </div>
               <p class="helper-text stats-search-status" id="statsPlayer1Status"></p>
             </div>
             <div class="section">
               <p class="label">Игрок 2</p>
-              <input class="input" id="statsPlayer2Input" type="text" placeholder="Введите имя второго игрока" disabled />
+              <div class="player-picker">
+                <input class="input" id="statsPlayer2Input" type="text" placeholder="Введите имя второго игрока" autocomplete="off" disabled />
+                <div class="player-picker-menu hidden" id="statsPlayer2Suggestions"></div>
+              </div>
               <p class="helper-text stats-search-status" id="statsPlayer2Status"></p>
             </div>
           </div>

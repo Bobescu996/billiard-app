@@ -10,6 +10,8 @@ export const refs = {
 
   player1Input: document.getElementById('player1Input'),
   player2Input: document.getElementById('player2Input'),
+  player1Suggestions: document.getElementById('player1Suggestions'),
+  player2Suggestions: document.getElementById('player2Suggestions'),
   player1LookupStatus: document.getElementById('player1LookupStatus'),
   player2LookupStatus: document.getElementById('player2LookupStatus'),
   playersError: document.getElementById('playersError'),
@@ -80,6 +82,8 @@ export const refs = {
   leaderboardsReportPanel: document.getElementById('leaderboardsReportPanel'),
   statsPlayer1Input: document.getElementById('statsPlayer1Input'),
   statsPlayer2Input: document.getElementById('statsPlayer2Input'),
+  statsPlayer1Suggestions: document.getElementById('statsPlayer1Suggestions'),
+  statsPlayer2Suggestions: document.getElementById('statsPlayer2Suggestions'),
   statsPlayer1Status: document.getElementById('statsPlayer1Status'),
   statsPlayer2Status: document.getElementById('statsPlayer2Status'),
   statsPeriodSegments: document.getElementById('statsPeriodSegments'),

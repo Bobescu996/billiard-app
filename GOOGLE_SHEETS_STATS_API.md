@@ -5,6 +5,7 @@ This version extends the existing Apps Script so the app can:
 - append matches
 - upsert players into the `Players` sheet
 - find a player by name
+- return the full players list
 - return filtered match statistics
 
 ## Sheets
@@ -58,6 +59,10 @@ function doPost(e) {
 
     if (action === 'findPlayer') {
       return findPlayerAction(request.name || '');
+    }
+
+    if (action === 'getPlayers') {
+      return getPlayersAction();
     }
 
     if (action === 'getMatchStats') {
@@ -174,6 +179,21 @@ function findPlayerAction(name) {
     exists: Boolean(found),
     name: found || ''
   });
+}
+
+function getPlayersAction() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PLAYERS_SHEET);
+  if (!sheet) {
+    return jsonResponse({ ok: false, error: 'Players sheet not found' });
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return jsonResponse({ ok: true, players: [] });
+  }
+
+  const players = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().filter(Boolean);
+  return jsonResponse({ ok: true, players: players });
 }
 
 function getMatchStatsAction(filters) {

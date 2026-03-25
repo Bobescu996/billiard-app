@@ -18,7 +18,7 @@ import {
   clearSessionStorage
 } from './storage.js';
 import { enqueueStatisticsSync, syncPendingStatistics } from './sync.js';
-import { findPlayerByName, getMatchStats, upsertPlayers } from './stats-api.js';
+import { findPlayerByName, getMatchStats, getPlayers, upsertPlayers } from './stats-api.js';
 
 const lookupDebounceTimers = {};
 const lookupRequestIds = {};
@@ -565,6 +565,114 @@ function getLookupCacheKey(name) {
   return normalizeName(name).toLowerCase();
 }
 
+async function ensurePlayersCatalogLoaded() {
+  if (state.playersCatalogLoaded) return state.playersCatalog;
+
+  const result = await getPlayers();
+  const players = Array.isArray(result.players) ? result.players : [];
+
+  state.playersCatalog = players
+    .map((name) => normalizeName(name))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'ru', { sensitivity: 'base' }));
+
+  state.playersCatalogLoaded = true;
+
+  state.playersCatalog.forEach((name) => {
+    state.playerLookupCache[getLookupCacheKey(name)] = {
+      exists: true,
+      name
+    };
+  });
+
+  return state.playersCatalog;
+}
+
+function closeSuggestionMenu(menuRef) {
+  const menu = refs[menuRef];
+  if (!menu) return;
+  menu.innerHTML = '';
+  menu.classList.add('hidden');
+  if (state.activeSuggestionMenu === menuRef) {
+    state.activeSuggestionMenu = null;
+  }
+}
+
+function closeAllSuggestionMenus() {
+  ['player1Suggestions', 'player2Suggestions', 'statsPlayer1Suggestions', 'statsPlayer2Suggestions'].forEach(
+    closeSuggestionMenu
+  );
+}
+
+function getPlayerSuggestions(query, excludedName = '') {
+  const normalizedQuery = normalizeName(query).toLowerCase();
+  const normalizedExcluded = normalizeName(excludedName).toLowerCase();
+
+  return state.playersCatalog
+    .filter((name) => {
+      const normalizedName = name.toLowerCase();
+      if (normalizedExcluded && normalizedName === normalizedExcluded) return false;
+      if (!normalizedQuery) return true;
+      return normalizedName.includes(normalizedQuery);
+    })
+    .slice(0, 8);
+}
+
+function applyPlayerSelection({ inputRef, statusRef, menuRef, name, mode = 'game' }) {
+  refs[inputRef].value = name;
+  state.playerLookupCache[getLookupCacheKey(name)] = { exists: true, name };
+  closeSuggestionMenu(menuRef);
+
+  if (mode === 'game') {
+    setPlayerLookupMessage(statusRef, 'Игрок выбран из базы.', 'is-success');
+    validateInputs(false);
+    updateTimerCardState();
+    persistSession();
+    return;
+  }
+
+  setStatsLookupMessage(statusRef, 'Игрок выбран из базы.', 'is-success');
+  if (inputRef === 'statsPlayer1Input') {
+    updateMatchStatsInputsState();
+  }
+}
+
+function renderSuggestionMenu({ inputRef, menuRef, statusRef, mode = 'game', excludedInputRef = null }) {
+  const input = refs[inputRef];
+  const menu = refs[menuRef];
+
+  if (input.disabled) {
+    closeSuggestionMenu(menuRef);
+    return;
+  }
+
+  const suggestions = getPlayerSuggestions(
+    input.value,
+    excludedInputRef ? refs[excludedInputRef].value : ''
+  );
+
+  if (!suggestions.length) {
+    closeSuggestionMenu(menuRef);
+    return;
+  }
+
+  menu.innerHTML = '';
+
+  suggestions.forEach((name) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'player-picker-option';
+    button.textContent = name;
+    button.addEventListener('click', () => {
+      applyPlayerSelection({ inputRef, statusRef, menuRef, name, mode });
+    });
+    menu.appendChild(button);
+  });
+
+  menu.classList.remove('hidden');
+  state.activeSuggestionMenu = menuRef;
+}
+
 async function lookupPlayer(name) {
   const normalizedName = normalizeName(name);
   if (!normalizedName) return { exists: false };
@@ -1028,6 +1136,11 @@ function createStatisticsEntry(payload) {
       [entry.player1, entry.player2].forEach((name) => {
         const normalizedName = normalizeName(name);
         if (!normalizedName) return;
+
+        if (!state.playersCatalog.some((item) => item.toLowerCase() === normalizedName.toLowerCase())) {
+          state.playersCatalog.push(normalizedName);
+          state.playersCatalog.sort((a, b) => a.localeCompare(b, 'ru', { sensitivity: 'base' }));
+        }
 
         state.playerLookupCache[getLookupCacheKey(normalizedName)] = {
           exists: true,
@@ -1881,6 +1994,17 @@ function bindEvents() {
       statusRef: 'player1LookupStatus',
       mode: 'game'
     });
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'player1Input',
+          menuRef: 'player1Suggestions',
+          statusRef: 'player1LookupStatus',
+          mode: 'game',
+          excludedInputRef: 'player2Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('player1Suggestions'));
   });
 
   refs.player2Input.addEventListener('input', () => {
@@ -1892,6 +2016,45 @@ function bindEvents() {
       statusRef: 'player2LookupStatus',
       mode: 'game'
     });
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'player2Input',
+          menuRef: 'player2Suggestions',
+          statusRef: 'player2LookupStatus',
+          mode: 'game',
+          excludedInputRef: 'player1Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('player2Suggestions'));
+  });
+
+  refs.player1Input.addEventListener('focus', () => {
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'player1Input',
+          menuRef: 'player1Suggestions',
+          statusRef: 'player1LookupStatus',
+          mode: 'game',
+          excludedInputRef: 'player2Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('player1Suggestions'));
+  });
+
+  refs.player2Input.addEventListener('focus', () => {
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'player2Input',
+          menuRef: 'player2Suggestions',
+          statusRef: 'player2LookupStatus',
+          mode: 'game',
+          excludedInputRef: 'player1Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('player2Suggestions'));
   });
 
   refs.gameSegments.addEventListener('click', (event) => {
@@ -2037,6 +2200,17 @@ function bindEvents() {
       statusRef: 'statsPlayer1Status',
       mode: 'stats'
     });
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'statsPlayer1Input',
+          menuRef: 'statsPlayer1Suggestions',
+          statusRef: 'statsPlayer1Status',
+          mode: 'stats',
+          excludedInputRef: 'statsPlayer2Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('statsPlayer1Suggestions'));
   });
 
   refs.statsPlayer2Input.addEventListener('input', () => {
@@ -2046,6 +2220,45 @@ function bindEvents() {
       statusRef: 'statsPlayer2Status',
       mode: 'stats'
     });
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'statsPlayer2Input',
+          menuRef: 'statsPlayer2Suggestions',
+          statusRef: 'statsPlayer2Status',
+          mode: 'stats',
+          excludedInputRef: 'statsPlayer1Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('statsPlayer2Suggestions'));
+  });
+
+  refs.statsPlayer1Input.addEventListener('focus', () => {
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'statsPlayer1Input',
+          menuRef: 'statsPlayer1Suggestions',
+          statusRef: 'statsPlayer1Status',
+          mode: 'stats',
+          excludedInputRef: 'statsPlayer2Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('statsPlayer1Suggestions'));
+  });
+
+  refs.statsPlayer2Input.addEventListener('focus', () => {
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'statsPlayer2Input',
+          menuRef: 'statsPlayer2Suggestions',
+          statusRef: 'statsPlayer2Status',
+          mode: 'stats',
+          excludedInputRef: 'statsPlayer1Input'
+        });
+      })
+      .catch(() => closeSuggestionMenu('statsPlayer2Suggestions'));
   });
 
   refs.statsPeriodSegments.addEventListener('click', (event) => {
@@ -2097,6 +2310,11 @@ function bindEvents() {
     if (event.target === refs.confirmModal) {
       closeConfirmModal();
     }
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.player-picker')) return;
+    closeAllSuggestionMenus();
   });
 
   document.addEventListener('visibilitychange', () => {

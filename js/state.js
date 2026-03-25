@@ -31,6 +31,9 @@ export const state = {
   matchStatsResults: [],
   selectedMatchStatsId: null,
   playerLookupCache: {},
+  playersCatalog: [],
+  playersCatalogLoaded: false,
+  activeSuggestionMenu: null,
 
   timeExpired: false,
   timerCardAutoScrolled: false

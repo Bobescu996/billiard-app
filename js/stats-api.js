@@ -56,6 +56,10 @@ export async function findPlayerByName(name) {
   return requestStatsAction('findPlayer', { name: preparedName });
 }
 
+export async function getPlayers() {
+  return requestStatsAction('getPlayers');
+}
+
 export async function getMatchStats(filters) {
   return requestStatsAction('getMatchStats', { filters });
 }

@@ -261,6 +261,43 @@ button {
   cursor: not-allowed;
 }
 
+.player-picker {
+  position: relative;
+}
+
+.player-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #1d2a40;
+  box-shadow: var(--shadow-md);
+}
+
+.player-picker-option {
+  min-height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.player-picker-option:hover {
+  background: rgba(96, 165, 250, 0.16);
+  color: #fff;
+}
+
 .segmented {
   display: flex;
   flex-wrap: wrap;
