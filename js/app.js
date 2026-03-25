@@ -599,7 +599,13 @@ function closeSuggestionMenu(menuRef) {
 }
 
 function closeAllSuggestionMenus() {
-  ['player1Suggestions', 'player2Suggestions', 'statsPlayer1Suggestions', 'statsPlayer2Suggestions'].forEach(
+  [
+    'player1Suggestions',
+    'player2Suggestions',
+    'statsPlayer1Suggestions',
+    'statsPlayer2Suggestions',
+    'playerStatsSuggestions'
+  ].forEach(
     closeSuggestionMenu
   );
 }
@@ -758,6 +764,20 @@ function updateMatchStatsPeriodUI() {
   setActiveSegment(refs.statsPeriodSegments, (segment) => segment.dataset.period === state.matchStatsPeriod);
 }
 
+function updatePlayerStatsPeriodUI() {
+  setActiveSegment(
+    refs.playerStatsPeriodSegments,
+    (segment) => segment.dataset.playerPeriod === state.playerStatsPeriod
+  );
+}
+
+function updateLeaderboardsPeriodUI() {
+  setActiveSegment(
+    refs.leaderboardsPeriodSegments,
+    (segment) => segment.dataset.leaderboardPeriod === state.leaderboardsPeriod
+  );
+}
+
 function updateMatchStatsInputsState() {
   const hasPlayer1 = Boolean(normalizeName(refs.statsPlayer1Input.value));
   refs.statsPlayer2Input.disabled = !hasPlayer1;
@@ -765,6 +785,428 @@ function updateMatchStatsInputsState() {
   if (!hasPlayer1) {
     refs.statsPlayer2Input.value = '';
     setStatsLookupMessage('statsPlayer2Status', '', '');
+  }
+}
+
+function renderPlayerStatsSummary() {
+  const summary = refs.playerStatsSummary;
+  const empty = refs.playerStatsEmptyState;
+  const data = state.playerStatsData;
+
+  if (!data) {
+    summary.classList.add('hidden');
+    summary.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  summary.classList.remove('hidden');
+  summary.innerHTML = '';
+
+  const groups = [
+    {
+      title: 'Общее',
+      className: '',
+      cards: [
+        ['Сыграно партий', data.playedParties],
+        ['Забито шаров', data.ballsScored],
+        ['Среднее количество забитых шаров за партию', data.avgBallsPerParty],
+        ['Средняя длительность партии', data.avgPartyDuration]
+      ]
+    },
+    {
+      title: 'Победы',
+      className: 'is-success',
+      cards: [
+        ['Побед в партиях', data.wonParties],
+        ['Побед во встречах', data.wonMatches]
+      ]
+    },
+    {
+      title: 'Поражения',
+      className: 'is-danger',
+      cards: [
+        ['Поражений в партиях', data.lostParties],
+        ['Поражений во встречах', data.lostMatches]
+      ]
+    },
+    {
+      title: 'Рейтинг',
+      className: 'is-rating',
+      cards: [['Рейтинг', data.rating]]
+    }
+  ];
+
+  groups.forEach((group) => {
+    const section = document.createElement('div');
+    section.className = 'stats-summary-section' + (group.className ? ' ' + group.className : '');
+
+    const title = document.createElement('div');
+    title.className = 'stats-summary-section-title';
+    title.textContent = group.title;
+
+    const grid = document.createElement('div');
+    grid.className = 'stats-summary-grid';
+
+    group.cards.forEach(([label, value]) => {
+      const card = document.createElement('div');
+      card.className = 'stats-summary-card';
+
+      const valueEl = document.createElement('div');
+      valueEl.className = 'stats-summary-value';
+      valueEl.textContent = String(value);
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'stats-summary-label';
+      labelEl.textContent = label;
+
+      card.append(valueEl, labelEl);
+      grid.appendChild(card);
+    });
+
+    section.append(title, grid);
+    summary.appendChild(section);
+  });
+}
+
+function buildPlayerStats(matches, playerName) {
+  const setMatches = matches.filter((item) => item.type === TYPE_LABELS.set);
+  const frameMatches = matches.filter((item) => item.type !== TYPE_LABELS.set);
+
+  const playedParties = matches.reduce((sum, item) => {
+    return sum + Math.max(1, Number(item.frameCount || 1));
+  }, 0);
+
+  const wonParties = matches.reduce((sum, item) => sum + Number(item.wins1 || 0), 0);
+  const lostParties = matches.reduce((sum, item) => sum + Number(item.wins2 || 0), 0);
+
+  const wonMatches = frameMatches.filter((item) => Number(item.wins1 || 0) > Number(item.wins2 || 0)).length;
+  const lostMatches = frameMatches.filter((item) => Number(item.wins2 || 0) > Number(item.wins1 || 0)).length;
+
+  const ballsScored = matches.reduce((sum, item) => sum + Number(item.balls1 || 0), 0);
+  const totalDuration = matches.reduce((sum, item) => sum + Number(item.durationSeconds || 0), 0);
+
+  const avgBallsPerParty = playedParties ? (ballsScored / playedParties).toFixed(1) : '0.0';
+  const avgPartyDuration = playedParties ? formatTime(Math.round(totalDuration / playedParties)) : '00:00';
+
+  return {
+    playerName,
+    setMatchesCount: setMatches.length,
+    frameMatchesCount: frameMatches.length,
+    playedParties,
+    wonParties,
+    lostParties,
+    wonMatches,
+    lostMatches,
+    ballsScored,
+    avgBallsPerParty,
+    avgPartyDuration,
+    rating: '—'
+  };
+}
+
+function buildPlayerGameStats(matches) {
+  return matches.reduce((acc, item) => {
+    const key = item.game || 'Не указано';
+    if (!acc[key]) {
+      acc[key] = {
+        game: key,
+        playedParties: 0,
+        wonParties: 0,
+        wonMatches: 0
+      };
+    }
+
+    acc[key].playedParties += Math.max(1, Number(item.frameCount || 1));
+    acc[key].wonParties += Number(item.wins1 || 0);
+
+    if (item.type !== TYPE_LABELS.set && Number(item.wins1 || 0) > Number(item.wins2 || 0)) {
+      acc[key].wonMatches += 1;
+    }
+
+    return acc;
+  }, {});
+}
+
+function sortLeaderboardRows(rows, valueKey, tieKey) {
+  return [...rows]
+    .sort((a, b) => {
+      if (Number(b[valueKey]) !== Number(a[valueKey])) {
+        return Number(b[valueKey]) - Number(a[valueKey]);
+      }
+
+      if (tieKey && Number(b[tieKey]) !== Number(a[tieKey])) {
+        return Number(b[tieKey]) - Number(a[tieKey]);
+      }
+
+      return a.player.localeCompare(b.player, 'ru', { sensitivity: 'base' });
+    })
+    .slice(0, 10);
+}
+
+function buildLeaderboards(playerReports) {
+  const mostPlayedParties = sortLeaderboardRows(playerReports, 'playedParties', 'wonParties');
+  const mostWonParties = sortLeaderboardRows(playerReports, 'wonParties', 'playedParties');
+  const mostWonMatches = sortLeaderboardRows(playerReports, 'wonMatches', 'wonParties');
+
+  const gameLeaders = {};
+
+  playerReports.forEach((report) => {
+    Object.values(report.games).forEach((gameStats) => {
+      const current = gameLeaders[gameStats.game];
+
+      if (
+        !current ||
+        gameStats.wonMatches > current.wonMatches ||
+        (gameStats.wonMatches === current.wonMatches && gameStats.wonParties > current.wonParties) ||
+        (
+          gameStats.wonMatches === current.wonMatches &&
+          gameStats.wonParties === current.wonParties &&
+          gameStats.playedParties > current.playedParties
+        )
+      ) {
+        gameLeaders[gameStats.game] = {
+          game: gameStats.game,
+          player: report.player,
+          wonMatches: gameStats.wonMatches,
+          wonParties: gameStats.wonParties,
+          playedParties: gameStats.playedParties
+        };
+      }
+    });
+  });
+
+  const bestByGame = Object.values(gameLeaders).sort((a, b) =>
+    a.game.localeCompare(b.game, 'ru', { sensitivity: 'base' })
+  );
+
+  return {
+    playerCount: playerReports.length,
+    mostPlayedParties,
+    mostWonParties,
+    mostWonMatches,
+    bestByGame
+  };
+}
+
+function renderLeaderboards() {
+  const content = refs.leaderboardsContent;
+  const empty = refs.leaderboardsEmptyState;
+  const data = state.leaderboardsData;
+
+  if (!data) {
+    content.classList.add('hidden');
+    content.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+  content.innerHTML = '';
+
+  const sections = [
+    {
+      id: 'mostPlayedParties',
+      title: 'ТОП-10 по сыгранным партиям',
+      tone: '',
+      rows: data.mostPlayedParties,
+      formatter: (row) => row.playedParties + ' партий'
+    },
+    {
+      id: 'mostWonParties',
+      title: 'ТОП-10 по выигранным партиям',
+      tone: 'is-success',
+      rows: data.mostWonParties,
+      formatter: (row) => row.wonParties + ' побед'
+    },
+    {
+      id: 'mostWonMatches',
+      title: 'ТОП-10 по выигранным встречам',
+      tone: 'is-accent',
+      rows: data.mostWonMatches,
+      formatter: (row) => row.wonMatches + ' встреч'
+    },
+    {
+      id: 'bestByGame',
+      title: 'Лучшие игроки по дисциплинам',
+      tone: 'is-warning',
+      rows: data.bestByGame,
+      formatter: (row) => row.game + ' • ' + row.wonMatches + ' встреч • ' + row.wonParties + ' партий'
+    }
+  ];
+
+  sections.forEach((sectionData) => {
+    const isExpanded = Boolean(state.leaderboardsExpanded[sectionData.id]);
+    const section = document.createElement('div');
+    section.className =
+      'leaderboard-section' +
+      (sectionData.tone ? ' ' + sectionData.tone : '') +
+      (isExpanded ? ' is-expanded' : '');
+
+    const title = document.createElement('button');
+    title.type = 'button';
+    title.className = 'leaderboard-section-toggle';
+    title.dataset.leaderboardSection = sectionData.id;
+
+    const titleText = document.createElement('span');
+    titleText.className = 'leaderboard-section-title';
+    titleText.textContent = sectionData.title;
+
+    const titleState = document.createElement('span');
+    titleState.className = 'leaderboard-section-state';
+    titleState.textContent = isExpanded ? 'Свернуть' : 'Показать';
+
+    title.append(titleText, titleState);
+
+    const list = document.createElement('div');
+    list.className = 'leaderboard-list' + (isExpanded ? '' : ' hidden');
+
+    if (!sectionData.rows.length) {
+      const emptyRow = document.createElement('div');
+      emptyRow.className = 'leaderboard-item is-empty';
+      emptyRow.textContent = 'Нет данных за выбранный период.';
+      list.appendChild(emptyRow);
+    } else {
+      sectionData.rows.forEach((row, index) => {
+        const item = document.createElement('div');
+        item.className = 'leaderboard-item';
+
+        const left = document.createElement('div');
+        left.className = 'leaderboard-item-left';
+
+        const rank = document.createElement('div');
+        rank.className = 'leaderboard-rank';
+        rank.textContent = String(index + 1);
+
+        const player = document.createElement('div');
+        player.className = 'leaderboard-player';
+        player.textContent = row.player;
+
+        left.append(rank, player);
+
+        const value = document.createElement('div');
+        value.className = 'leaderboard-value';
+        value.textContent = sectionData.formatter(row);
+
+        item.append(left, value);
+        list.appendChild(item);
+      });
+    }
+
+    section.append(title, list);
+    content.appendChild(section);
+  });
+}
+
+async function loadLeaderboardsReport() {
+  refs.leaderboardsError.textContent = '';
+  refs.loadLeaderboardsBtn.disabled = true;
+  refs.loadLeaderboardsBtn.textContent = 'Загрузка...';
+  refs.leaderboardsMetaText.textContent = 'Собираем рейтинги из базы игроков и матчей...';
+  refs.leaderboardsMetaText.classList.remove('is-success', 'is-warning', 'is-error');
+
+  try {
+    const players = await ensurePlayersCatalogLoaded();
+
+    if (!players.length) {
+      state.leaderboardsData = null;
+      refs.leaderboardsMetaText.textContent = 'В базе игроков пока нет данных.';
+      renderLeaderboards();
+      return;
+    }
+
+    const reports = await Promise.all(
+      players.map(async (player) => {
+        const result = await getMatchStats({
+          player1: player,
+          player2: '',
+          period: state.leaderboardsPeriod
+        });
+
+        const matches = Array.isArray(result.matches) ? result.matches.map(prepareMatchStatsItem) : [];
+        const stats = buildPlayerStats(matches, player);
+
+        return {
+          player,
+          ...stats,
+          games: buildPlayerGameStats(matches)
+        };
+      })
+    );
+
+    const filteredReports = reports.filter((item) => item.playedParties > 0);
+
+    if (!filteredReports.length) {
+      state.leaderboardsData = null;
+      refs.leaderboardsMetaText.textContent = 'За выбранный период подходящие матчи не найдены.';
+      renderLeaderboards();
+      return;
+    }
+
+    state.leaderboardsData = buildLeaderboards(filteredReports);
+    refs.leaderboardsMetaText.textContent = '';
+    renderLeaderboards();
+  } catch (error) {
+    state.leaderboardsData = null;
+    renderLeaderboards();
+    refs.leaderboardsError.textContent =
+      error instanceof Error ? error.message : 'Не удалось загрузить рейтинги.';
+    refs.leaderboardsMetaText.textContent = 'Проверьте подключение к Google Sheets.';
+    refs.leaderboardsMetaText.classList.add('is-warning');
+  } finally {
+    refs.loadLeaderboardsBtn.disabled = false;
+    refs.loadLeaderboardsBtn.textContent = 'Показать';
+  }
+}
+
+async function loadPlayerStatsReport() {
+  refs.playerStatsError.textContent = '';
+
+  const playerName = normalizeName(refs.playerStatsInput.value);
+  if (!playerName) {
+    refs.playerStatsError.textContent = 'Введите имя игрока.';
+    return;
+  }
+
+  refs.loadPlayerStatsBtn.disabled = true;
+  refs.loadPlayerStatsBtn.textContent = 'Загрузка...';
+  refs.playerStatsMetaText.textContent = 'Получаем статистику игрока из базы...';
+  refs.playerStatsMetaText.classList.remove('is-success', 'is-warning', 'is-error');
+
+  try {
+    const result = await getMatchStats({
+      player1: playerName,
+      player2: '',
+      period: state.playerStatsPeriod
+    });
+
+    const matches = Array.isArray(result.matches) ? result.matches.map(prepareMatchStatsItem) : [];
+
+    if (!matches.length) {
+      state.playerStatsData = null;
+      refs.playerStatsMetaText.textContent = 'По выбранному периоду матчи не найдены.';
+      setStatsLookupMessage('playerStatsStatus', 'Такой игрок не найден в матчах за выбранный период.', 'is-warning');
+      renderPlayerStatsSummary();
+      return;
+    }
+
+    state.playerStatsData = buildPlayerStats(matches, playerName);
+    setStatsLookupMessage('playerStatsStatus', 'Игрок найден в матчах.', 'is-success');
+    refs.playerStatsMetaText.textContent =
+      'Игрок: ' + playerName + '. Матчей найдено: ' + matches.length + '.';
+    renderPlayerStatsSummary();
+  } catch (error) {
+    state.playerStatsData = null;
+    renderPlayerStatsSummary();
+    refs.playerStatsError.textContent =
+      error instanceof Error ? error.message : 'Не удалось загрузить статистику игрока.';
+    refs.playerStatsMetaText.textContent = 'Проверьте подключение к Google Sheets.';
+    refs.playerStatsMetaText.classList.add('is-warning');
+  } finally {
+    refs.loadPlayerStatsBtn.disabled = false;
+    refs.loadPlayerStatsBtn.textContent = 'Показать';
   }
 }
 
@@ -1095,7 +1537,9 @@ function openStatsScreen() {
   updateStatsReportUI();
   updateMatchStatsInputsState();
   updateMatchStatsPeriodUI();
+  updatePlayerStatsPeriodUI();
   renderMatchStatsResults();
+  renderPlayerStatsSummary();
   refs.gameScreen.classList.add('hidden');
   refs.statsScreen.classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2167,15 +2611,19 @@ function bindEvents() {
     });
   });
 
-  refs.newGameBtn.addEventListener('click', () => {
-    openConfirmModal('Новая игра', 'Текущая незавершённая игра будет очищена. Продолжить?', () => {
-      resetMatchState({ keepInputs: false });
-      clearSessionState();
-      showToast('Можно начинать новую игру.');
+  if (refs.newGameBtn) {
+    refs.newGameBtn.addEventListener('click', () => {
+      openConfirmModal('Новая игра', 'Текущая незавершённая игра будет очищена. Продолжить?', () => {
+        resetMatchState({ keepInputs: false });
+        clearSessionState();
+        showToast('Можно начинать новую игру.');
+      });
     });
-  });
+  }
 
-  refs.goStatsBtn.addEventListener('click', openStatsScreen);
+  if (refs.goStatsBtn) {
+    refs.goStatsBtn.addEventListener('click', openStatsScreen);
+  }
   refs.backToGameBtn.addEventListener('click', openGameScreen);
 
   refs.statsModeSegments.addEventListener('click', (event) => {
@@ -2261,6 +2709,69 @@ function bindEvents() {
       .catch(() => closeSuggestionMenu('statsPlayer2Suggestions'));
   });
 
+  refs.playerStatsInput.addEventListener('input', () => {
+    setStatsLookupMessage('playerStatsStatus', '', '');
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'playerStatsInput',
+          menuRef: 'playerStatsSuggestions',
+          statusRef: 'playerStatsStatus',
+          mode: 'stats'
+        });
+      })
+      .catch(() => closeSuggestionMenu('playerStatsSuggestions'));
+    queuePlayerLookup({
+      inputRef: 'playerStatsInput',
+      statusRef: 'playerStatsStatus',
+      mode: 'stats'
+    });
+  });
+
+  refs.playerStatsInput.addEventListener('focus', () => {
+    void ensurePlayersCatalogLoaded()
+      .then(() => {
+        renderSuggestionMenu({
+          inputRef: 'playerStatsInput',
+          menuRef: 'playerStatsSuggestions',
+          statusRef: 'playerStatsStatus',
+          mode: 'stats'
+        });
+      })
+      .catch(() => closeSuggestionMenu('playerStatsSuggestions'));
+  });
+
+  refs.playerStatsPeriodSegments.addEventListener('click', (event) => {
+    const button = event.target.closest('.segment[data-player-period]');
+    if (!button) return;
+    state.playerStatsPeriod = button.dataset.playerPeriod;
+    updatePlayerStatsPeriodUI();
+  });
+
+  refs.loadPlayerStatsBtn.addEventListener('click', () => {
+    void loadPlayerStatsReport();
+  });
+
+  refs.leaderboardsPeriodSegments.addEventListener('click', (event) => {
+    const button = event.target.closest('.segment[data-leaderboard-period]');
+    if (!button) return;
+    state.leaderboardsPeriod = button.dataset.leaderboardPeriod;
+    updateLeaderboardsPeriodUI();
+  });
+
+  refs.loadLeaderboardsBtn.addEventListener('click', () => {
+    void loadLeaderboardsReport();
+  });
+
+  refs.leaderboardsContent.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-leaderboard-section]');
+    if (!button) return;
+
+    const sectionId = button.dataset.leaderboardSection;
+    state.leaderboardsExpanded[sectionId] = !state.leaderboardsExpanded[sectionId];
+    renderLeaderboards();
+  });
+
   refs.statsPeriodSegments.addEventListener('click', (event) => {
     const button = event.target.closest('.segment[data-period]');
     if (!button) return;
@@ -2337,7 +2848,11 @@ function init() {
   updateStatsReportUI();
   updateMatchStatsInputsState();
   updateMatchStatsPeriodUI();
+  updatePlayerStatsPeriodUI();
+  updateLeaderboardsPeriodUI();
   renderMatchStatsResults();
+  renderPlayerStatsSummary();
+  renderLeaderboards();
   updateGameSelectionUI();
   updateTypeAvailability();
   updateTypeSelectionUI();

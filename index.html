@@ -15,7 +15,9 @@
         <h1 class="screen-title">
           <img class="header-logo" src="img/header-logo.png" alt="Billiard Stats" />
         </h1>
-        
+        <div class="header-actions">
+          <button class="btn btn-secondary header-stats-btn" id="goStatsBtn" type="button">Статистика</button>
+        </div>
       </header>
 
       <section class="card is-active" id="inputCard">
@@ -219,18 +221,6 @@
         </div>
       </section>
 
-      <section class="card" id="actionsCard">
-        <div class="card-title">
-          <span>Действия</span>
-          <span class="step-badge">Шаг 4</span>
-        </div>
-
-        <div class="actions-card">
-          <button class="btn btn-secondary" id="newGameBtn" type="button">Новая игра</button>
-          <button class="btn btn-accent" id="goStatsBtn" type="button">Перейти в статистику</button>
-          <p class="ghost-note">Теперь статистика сохраняется в localStorage и не пропадает после перезагрузки страницы.</p>
-        </div>
-      </section>
     </section>
 
     <section id="statsScreen" class="hidden">
@@ -283,8 +273,8 @@
 
         <div class="segmented" id="statsReportSegments">
           <button class="segment is-active" data-report="matches" type="button">Матчи</button>
-          <button class="segment" data-report="player" type="button">Игрок</button>
-          <button class="segment" data-report="leaderboards" type="button">Лидерборды</button>
+          <button class="segment" data-report="player" type="button">Игроки</button>
+          <button class="segment" data-report="leaderboards" type="button">Рейтинги</button>
         </div>
 
         <div id="matchesReportPanel">
@@ -335,15 +325,66 @@
         </div>
 
         <div id="playerReportPanel" class="hidden">
-          <div class="stats-empty">
-            Раздел статистики игрока подготовлен и будет подключён следующим этапом.
+          <div class="section">
+            <p class="label">Имя игрока</p>
+            <div class="player-picker">
+              <input class="input" id="playerStatsInput" type="text" placeholder="Выберите игрока" autocomplete="off" />
+              <div class="player-picker-menu hidden" id="playerStatsSuggestions"></div>
+            </div>
+            <p class="helper-text stats-search-status" id="playerStatsStatus"></p>
           </div>
+
+          <div class="section">
+            <p class="label">Период</p>
+            <div class="segmented" id="playerStatsPeriodSegments">
+              <button class="segment" data-player-period="1m" type="button">1 месяц</button>
+              <button class="segment is-active" data-player-period="3m" type="button">3 месяца</button>
+              <button class="segment" data-player-period="all" type="button">Весь период</button>
+            </div>
+          </div>
+
+          <p class="error-text" id="playerStatsError"></p>
+
+          <div class="stats-actions">
+            <button class="btn btn-accent" id="loadPlayerStatsBtn" type="button">Показать</button>
+          </div>
+
+          <div class="stats-report-note" id="playerStatsMetaText">
+            Выберите игрока, чтобы получить его статистику за период.
+          </div>
+
+          <div id="playerStatsEmptyState" class="stats-empty">
+            Пока нет данных для отображения.
+          </div>
+
+          <div id="playerStatsSummary" class="stats-summary hidden"></div>
         </div>
 
         <div id="leaderboardsReportPanel" class="hidden">
-          <div class="stats-empty">
-            Лидерборды подготовлены как отдельная вкладка. Данные подключим следующим этапом.
+          <div class="section">
+            <p class="label">Период</p>
+            <div class="segmented" id="leaderboardsPeriodSegments">
+              <button class="segment" data-leaderboard-period="1m" type="button">1 месяц</button>
+              <button class="segment is-active" data-leaderboard-period="3m" type="button">3 месяца</button>
+              <button class="segment" data-leaderboard-period="all" type="button">Весь период</button>
+            </div>
           </div>
+
+          <p class="error-text" id="leaderboardsError"></p>
+
+          <div class="stats-actions">
+            <button class="btn btn-accent" id="loadLeaderboardsBtn" type="button">Показать</button>
+          </div>
+
+          <div class="stats-report-note" id="leaderboardsMetaText">
+            Загрузите рейтинг игроков по данным из общей базы.
+          </div>
+
+          <div id="leaderboardsEmptyState" class="stats-empty">
+            Пока нет данных для отображения.
+          </div>
+
+          <div id="leaderboardsContent" class="leaderboards hidden"></div>
         </div>
       </section>
     </section>
