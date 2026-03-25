@@ -11,9 +11,9 @@
 <body>
   <main class="app">
     <section id="gameScreen">
-      <header>
-        <h1 class="screen-title">
-          <img class="header-logo" src="img/header-logo.png" alt="Billiard Stats" />
+      <header class="game-header">
+        <h1 class="screen-title game-header-title">
+          <img class="header-logo" src="img/bill4all-logo.png" alt="Bill4All" />
         </h1>
         <div class="header-actions">
           <button class="btn btn-secondary header-stats-btn" id="goStatsBtn" type="button">Статистика</button>
@@ -224,17 +224,15 @@
     </section>
 
     <section id="statsScreen" class="hidden">
-      <header>
-        <h1 class="screen-title">Статистика</h1>
-       
-      </header>
-
       <section class="card stats-nav-card">
         <div class="stats-nav-top">
-          <button class="btn btn-success" id="backToGameBtn" type="button">Назад <br>к игре</button>
+          <button class="btn btn-success" id="backToGameBtn" type="button">
+            <img class="back-btn-arrow" src="img/arrow-back.png" alt="" aria-hidden="true" />
+            <span class="back-btn-text">Назад<br>к игре</span>
+          </button>
 
           <div class="stats-nav-brand">
-            <img class="stats-nav-header-logo" src="img/header-logo.png" alt="VS Billiards Statistics" />
+            <img class="stats-nav-header-logo" src="img/bill4all-logo.png" alt="Bill4All" />
           </div>
         </div>
 
