@@ -29,9 +29,11 @@
           <div class="players-row">
             <div>
               <input class="input" id="player1Input" type="text" placeholder="Игрок 1" />
+              <p class="helper-text player-lookup-status" id="player1LookupStatus"></p>
             </div>
             <div>
               <input class="input" id="player2Input" type="text" placeholder="Игрок 2" />
+              <p class="helper-text player-lookup-status" id="player2LookupStatus"></p>
             </div>
           </div>
           <p class="error-text" id="playersError"></p>
@@ -228,25 +230,109 @@
     <section id="statsScreen" class="hidden">
       <header>
         <h1 class="screen-title">Статистика</h1>
-        <p class="screen-subtitle">Все сохранённые результаты. Новые записи отображаются сверху.</p>
+       
       </header>
 
-      <section class="card">
+      <section class="card stats-nav-card">
+        <div class="stats-nav-top">
+          <button class="btn btn-success" id="backToGameBtn" type="button">Назад <br>к игре</button>
+
+          <div class="stats-nav-brand">
+            <img class="stats-nav-header-logo" src="img/header-logo.png" alt="VS Billiards Statistics" />
+          </div>
+        </div>
+
+        <div class="segmented stats-nav-segments" id="statsModeSegments">
+          <button class="segment is-active" data-stats-mode="history" type="button">История матчей</button>
+          <button class="segment" data-stats-mode="database" type="button">Статистика</button>
+        </div>
+
+        <p class="stats-report-note">
+          История хранится локально на этом устройстве, а статистика загружается из общей базы.
+        </p>
+      </section>
+
+      <section class="card" id="historyStatsCard">
         <div class="card-title">
           <span>История матчей</span>
           <span class="step-badge" id="statsCountBadge">0</span>
         </div>
 
         <div class="stats-actions">
-          <button class="btn btn-success" id="backToGameBtn" type="button">← Назад к игре</button>
-          <button class="btn btn-danger" id="clearStatsBtn" type="button">Очистить статистику</button>
+          <button class="btn btn-danger" id="clearStatsBtn" type="button">Очистить историю</button>
         </div>
 
         <div id="statsEmptyState" class="stats-empty">
-          Статистика пока пуста.
+          Локальная история матчей пока пуста.
         </div>
 
         <div id="statsList" class="stats-list hidden"></div>
+      </section>
+
+      <section class="card hidden" id="databaseStatsCard">
+        <div class="card-title">
+          <span>Статистика</span>
+          <span class="step-badge" id="databaseStatsBadge">DB</span>
+        </div>
+
+        <div class="segmented" id="statsReportSegments">
+          <button class="segment is-active" data-report="matches" type="button">Матчи</button>
+          <button class="segment" data-report="player" type="button">Игрок</button>
+          <button class="segment" data-report="leaderboards" type="button">Лидерборды</button>
+        </div>
+
+        <div id="matchesReportPanel">
+          <div class="stats-filter-grid">
+            <div class="section">
+              <p class="label">Игрок 1</p>
+              <input class="input" id="statsPlayer1Input" type="text" placeholder="Введите имя игрока" />
+              <p class="helper-text stats-search-status" id="statsPlayer1Status"></p>
+            </div>
+            <div class="section">
+              <p class="label">Игрок 2</p>
+              <input class="input" id="statsPlayer2Input" type="text" placeholder="Введите имя второго игрока" disabled />
+              <p class="helper-text stats-search-status" id="statsPlayer2Status"></p>
+            </div>
+          </div>
+
+          <div class="section">
+            <p class="label">Период</p>
+            <div class="segmented" id="statsPeriodSegments">
+              <button class="segment" data-period="1m" type="button">1 месяц</button>
+              <button class="segment is-active" data-period="3m" type="button">3 месяца</button>
+              <button class="segment" data-period="all" type="button">Весь период</button>
+            </div>
+          </div>
+
+          <p class="error-text" id="matchStatsError"></p>
+
+          <div class="stats-actions">
+            <button class="btn btn-accent" id="loadMatchStatsBtn" type="button">Показать</button>
+          </div>
+
+          <div class="stats-report-note" id="matchStatsMetaText">
+            Выберите игрока и период, чтобы загрузить список матчей из базы.
+          </div>
+
+          <div id="matchStatsEmptyState" class="stats-empty">
+            Пока нет данных для отображения.
+          </div>
+
+          <div id="matchStatsList" class="stats-list hidden"></div>
+          <div id="matchStatsDetail" class="stats-detail hidden"></div>
+        </div>
+
+        <div id="playerReportPanel" class="hidden">
+          <div class="stats-empty">
+            Раздел статистики игрока подготовлен и будет подключён следующим этапом.
+          </div>
+        </div>
+
+        <div id="leaderboardsReportPanel" class="hidden">
+          <div class="stats-empty">
+            Лидерборды подготовлены как отдельная вкладка. Данные подключим следующим этапом.
+          </div>
+        </div>
       </section>
     </section>
   </main>

@@ -25,6 +25,12 @@ export const state = {
   pendingSetResult: null,
   statistics: [],
   repeatState: { ...DEFAULT_REPEAT_STATE },
+  statsMode: 'history',
+  statsReport: 'matches',
+  matchStatsPeriod: '3m',
+  matchStatsResults: [],
+  selectedMatchStatsId: null,
+  playerLookupCache: {},
 
   timeExpired: false,
   timerCardAutoScrolled: false

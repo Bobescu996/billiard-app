@@ -188,6 +188,27 @@ button {
   line-height: 1.35;
 }
 
+.player-lookup-status,
+.stats-search-status {
+  min-height: 16px;
+  margin-top: 6px;
+}
+
+.helper-text.is-success,
+.stats-report-note.is-success {
+  color: var(--primary);
+}
+
+.helper-text.is-warning,
+.stats-report-note.is-warning {
+  color: var(--warning);
+}
+
+.helper-text.is-error,
+.stats-report-note.is-error {
+  color: var(--danger);
+}
+
 .error-text {
   min-height: 16px;
   font-size: 12px;
@@ -715,6 +736,80 @@ button {
   margin-bottom: 16px;
 }
 
+.stats-nav-card {
+  padding: 18px 20px;
+}
+
+.stats-nav-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.stats-nav-top #backToGameBtn {
+  width: 96px;
+  min-height: 48px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.15;
+  white-space: normal;
+  color: #fff;
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.stats-nav-top #backToGameBtn:hover {
+  color: #fff;
+}
+
+.stats-nav-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+}
+
+.stats-nav-header-logo {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+}
+
+.stats-nav-segments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stats-nav-segments .segment {
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 700;
+}
+
+.stats-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.stats-report-note {
+  margin: 14px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .stats-empty {
   padding: 18px 14px;
   border: 1px dashed var(--border);
@@ -735,6 +830,69 @@ button {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 14px;
+}
+
+.stats-item.is-clickable {
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.stats-item.is-clickable:hover {
+  border-color: var(--border-strong);
+  background: #2a3b58;
+  transform: translateY(-1px);
+}
+
+.stats-item.is-overview-row {
+  padding: 12px 14px;
+}
+
+.stats-item.is-overview-row:hover {
+  background: #25354f;
+}
+
+.stats-overview-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stats-overview-players {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.stats-overview-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.stats-overview-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.stats-overview-score {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.stats-overview-time {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .stats-item-top {
@@ -780,12 +938,96 @@ button {
   font-weight: 700;
 }
 
+.stats-detail {
+  margin-top: 14px;
+  background: var(--bg-control);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.stats-detail-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.stats-detail-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.stats-detail-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.stats-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stats-detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-detail-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stats-detail-list-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
 @media (max-width: 380px) {
+  .stats-nav-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stats-nav-segments {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
   .stats-actions {
     flex-direction: column;
   }
 
   .stats-meta {
     grid-template-columns: 1fr;
+  }
+
+  .stats-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-overview-top,
+  .stats-overview-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stats-overview-score {
+    font-size: 18px;
   }
 }

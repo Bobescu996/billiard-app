@@ -18,6 +18,10 @@ import {
   clearSessionStorage
 } from './storage.js';
 import { enqueueStatisticsSync, syncPendingStatistics } from './sync.js';
+import { findPlayerByName, getMatchStats, upsertPlayers } from './stats-api.js';
+
+const lookupDebounceTimers = {};
+const lookupRequestIds = {};
 
 function clearTimerInterval() {
   if (state.timerInterval) {
@@ -518,6 +522,393 @@ function applyRepeatState() {
   showToast('Параметры предыдущей игры восстановлены.');
 }
 
+function setTextStatus(element, text = '', tone = '') {
+  element.textContent = text;
+  element.classList.remove('is-success', 'is-warning', 'is-error');
+  if (tone) {
+    element.classList.add(tone);
+  }
+}
+
+function setPlayerLookupMessage(refKey, text = '', tone = '') {
+  setTextStatus(refs[refKey], text, tone);
+}
+
+function setStatsLookupMessage(refKey, text = '', tone = '') {
+  setTextStatus(refs[refKey], text, tone);
+}
+
+function normalizeName(value) {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+}
+
+function formatDisplayDate(value) {
+  const prepared = typeof value === 'string' ? value.trim() : '';
+  const dottedDateMatch = prepared.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (dottedDateMatch) {
+    return dottedDateMatch[1] + '-' + dottedDateMatch[2] + '-' + dottedDateMatch[3];
+  }
+
+  const parsed = new Date(prepared);
+  if (Number.isNaN(parsed.getTime())) return prepared;
+
+  return (
+    String(parsed.getDate()).padStart(2, '0') +
+    '-' +
+    String(parsed.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    parsed.getFullYear()
+  );
+}
+
+function getLookupCacheKey(name) {
+  return normalizeName(name).toLowerCase();
+}
+
+async function lookupPlayer(name) {
+  const normalizedName = normalizeName(name);
+  if (!normalizedName) return { exists: false };
+
+  const cacheKey = getLookupCacheKey(normalizedName);
+  if (cacheKey in state.playerLookupCache) {
+    return state.playerLookupCache[cacheKey];
+  }
+
+  const result = await findPlayerByName(normalizedName);
+  const prepared = {
+    exists: Boolean(result.exists),
+    name: result.name || normalizedName
+  };
+  if (prepared.exists) {
+    state.playerLookupCache[cacheKey] = prepared;
+  } else {
+    delete state.playerLookupCache[cacheKey];
+  }
+  return prepared;
+}
+
+function queuePlayerLookup({ inputRef, statusRef, emptyMessage = '', mode = 'stats' }) {
+  const input = refs[inputRef];
+  const status = refs[statusRef];
+  const name = normalizeName(input.value);
+
+  clearTimeout(lookupDebounceTimers[statusRef]);
+
+  if (!name) {
+    setTextStatus(status, emptyMessage, '');
+    return;
+  }
+
+  const requestId = (lookupRequestIds[statusRef] || 0) + 1;
+  lookupRequestIds[statusRef] = requestId;
+  setTextStatus(status, mode === 'stats' ? 'Ищем игрока...' : '', '');
+
+  lookupDebounceTimers[statusRef] = setTimeout(async () => {
+    try {
+      const result = await lookupPlayer(name);
+      if (lookupRequestIds[statusRef] !== requestId) return;
+
+      if (mode === 'game') {
+        setTextStatus(
+          status,
+          result.exists ? 'Игрок найден в базе.' : 'Новый игрок будет добавлен после сохранения матча.',
+          result.exists ? 'is-success' : ''
+        );
+        return;
+      }
+
+      setTextStatus(
+        status,
+        result.exists ? 'Игрок найден.' : 'Такой игрок не найден.',
+        result.exists ? 'is-success' : 'is-warning'
+      );
+    } catch (error) {
+      if (lookupRequestIds[statusRef] !== requestId) return;
+      setTextStatus(
+        status,
+        mode === 'stats' ? 'Поиск игроков станет доступен после обновления Apps Script.' : '',
+        mode === 'stats' ? 'is-warning' : ''
+      );
+    }
+  }, 350);
+}
+
+function updateStatsModeUI() {
+  setActiveSegment(refs.statsModeSegments, (segment) => segment.dataset.statsMode === state.statsMode);
+  refs.historyStatsCard.classList.toggle('hidden', state.statsMode !== 'history');
+  refs.databaseStatsCard.classList.toggle('hidden', state.statsMode !== 'database');
+}
+
+function updateStatsReportUI() {
+  setActiveSegment(refs.statsReportSegments, (segment) => segment.dataset.report === state.statsReport);
+  refs.matchesReportPanel.classList.toggle('hidden', state.statsReport !== 'matches');
+  refs.playerReportPanel.classList.toggle('hidden', state.statsReport !== 'player');
+  refs.leaderboardsReportPanel.classList.toggle('hidden', state.statsReport !== 'leaderboards');
+}
+
+function updateMatchStatsPeriodUI() {
+  setActiveSegment(refs.statsPeriodSegments, (segment) => segment.dataset.period === state.matchStatsPeriod);
+}
+
+function updateMatchStatsInputsState() {
+  const hasPlayer1 = Boolean(normalizeName(refs.statsPlayer1Input.value));
+  refs.statsPlayer2Input.disabled = !hasPlayer1;
+
+  if (!hasPlayer1) {
+    refs.statsPlayer2Input.value = '';
+    setStatsLookupMessage('statsPlayer2Status', '', '');
+  }
+}
+
+function renderMatchStatsDetail() {
+  const detail = refs.matchStatsDetail;
+  const selectedMatch = state.matchStatsResults.find((item) => item.id === state.selectedMatchStatsId);
+
+  if (!selectedMatch) {
+    detail.classList.add('hidden');
+    detail.innerHTML = '';
+    return;
+  }
+
+  detail.classList.remove('hidden');
+  detail.classList.add('is-clickable');
+  detail.innerHTML = '';
+
+  const top = document.createElement('div');
+  top.className = 'stats-overview-top';
+
+  const players = document.createElement('div');
+  players.className = 'stats-overview-players';
+  players.textContent = selectedMatch.players;
+
+  const score = document.createElement('div');
+  score.className = 'stats-overview-score';
+  score.textContent = selectedMatch.score;
+
+  top.append(players, score);
+
+  const summary = document.createElement('div');
+  summary.className = 'stats-overview-bottom';
+
+  const meta = document.createElement('div');
+  meta.className = 'stats-overview-meta';
+  meta.textContent = [
+    selectedMatch.displayDate || selectedMatch.date,
+    selectedMatch.game,
+    selectedMatch.type
+  ].join(' • ');
+
+  summary.appendChild(meta);
+
+  const grid = document.createElement('div');
+  grid.className = 'stats-detail-grid';
+
+  const isSetMatch = selectedMatch.type === TYPE_LABELS.set;
+  const detailRows = isSetMatch
+    ? [['Продолжительность', selectedMatch.durationText || '—']]
+    : [
+        ['Тип', selectedMatch.extra || '—'],
+        ['Продолжительность', selectedMatch.durationText || '—'],
+        ['Партий сыграно', selectedMatch.frameCount ? String(selectedMatch.frameCount) : '—']
+      ];
+
+  detailRows.forEach(([label, value]) => {
+    const block = document.createElement('div');
+    block.className = 'stats-detail-block';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'stats-meta-label';
+    labelEl.textContent = label;
+
+    const valueEl = document.createElement('span');
+    valueEl.className = 'stats-meta-value';
+    valueEl.textContent = value;
+
+    block.append(labelEl, valueEl);
+    grid.appendChild(block);
+  });
+
+  detail.append(top, summary, grid);
+
+  if (!isSetMatch && Array.isArray(selectedMatch.partyResults) && selectedMatch.partyResults.length) {
+    const partyResultsTitle = document.createElement('div');
+    partyResultsTitle.className = 'stats-detail-subtitle';
+    partyResultsTitle.textContent = 'Результаты партий';
+
+    const partyList = document.createElement('div');
+    partyList.className = 'stats-detail-list';
+
+    selectedMatch.partyResults.forEach((party) => {
+      const item = document.createElement('div');
+      item.className = 'stats-detail-list-item';
+      item.textContent = party.score + ' (' + formatTime(Number(party.durationSeconds || 0)) + ')';
+      partyList.appendChild(item);
+    });
+
+    detail.append(partyResultsTitle, partyList);
+  }
+}
+
+function renderMatchStatsResults() {
+  const list = refs.matchStatsList;
+  const empty = refs.matchStatsEmptyState;
+  const hasResults = state.matchStatsResults.length > 0;
+  const hasSelectedMatch = Boolean(
+    state.selectedMatchStatsId &&
+      state.matchStatsResults.some((item) => item.id === state.selectedMatchStatsId)
+  );
+
+  if (!hasResults) {
+    empty.textContent = 'По вашему фильтру матчей не найдено.';
+    empty.classList.remove('hidden');
+    list.classList.add('hidden');
+    refs.matchStatsDetail.classList.add('hidden');
+    refs.databaseStatsBadge.textContent = '0';
+    return;
+  }
+
+  refs.databaseStatsBadge.textContent = String(state.matchStatsResults.length);
+  empty.textContent = 'По вашему фильтру матчи не найдены.';
+  list.innerHTML = '';
+  state.matchStatsResults.forEach((item) => {
+    const card = document.createElement('div');
+    const isSetMatch = item.type === TYPE_LABELS.set;
+    card.className = 'stats-item is-overview-row' + (isSetMatch ? '' : ' is-clickable');
+    card.dataset.matchId = item.id;
+
+    const top = document.createElement('div');
+    top.className = 'stats-overview-top';
+
+    const players = document.createElement('div');
+    players.className = 'stats-overview-players';
+    players.textContent = item.players;
+
+    const score = document.createElement('div');
+    score.className = 'stats-overview-score';
+    score.textContent = item.score;
+
+    const duration = document.createElement('div');
+    duration.className = 'stats-overview-time';
+    duration.textContent = item.durationText || '—';
+
+    top.append(players, score);
+
+    const bottom = document.createElement('div');
+    bottom.className = 'stats-overview-bottom';
+
+    const meta = document.createElement('div');
+    meta.className = 'stats-overview-meta';
+    meta.textContent = [item.displayDate || item.date, item.game, item.type].join(' • ');
+
+    bottom.append(meta, duration);
+
+    card.append(top, bottom);
+    list.appendChild(card);
+  });
+
+  if (hasSelectedMatch) {
+    list.classList.add('hidden');
+    empty.classList.add('hidden');
+    renderMatchStatsDetail();
+    return;
+  }
+
+  list.classList.remove('hidden');
+  empty.classList.add('hidden');
+  refs.matchStatsDetail.classList.add('hidden');
+}
+
+function setSelectedMatchStats(matchId) {
+  const match = state.matchStatsResults.find((item) => item.id === matchId);
+  if (!match || match.type === TYPE_LABELS.set) return;
+
+  state.selectedMatchStatsId = state.selectedMatchStatsId === matchId ? null : matchId;
+  renderMatchStatsResults();
+}
+
+function prepareMatchStatsItem(item) {
+  const durationSeconds = Number(item.durationSeconds || 0);
+  let partyResults = [];
+
+  if (Array.isArray(item.partyResults)) {
+    partyResults = item.partyResults;
+  } else if (typeof item.partyResultsJson === 'string' && item.partyResultsJson.trim()) {
+    try {
+      const parsed = JSON.parse(item.partyResultsJson);
+      if (Array.isArray(parsed)) {
+        partyResults = parsed;
+      }
+    } catch (error) {
+      console.warn('Не удалось прочитать partyResultsJson:', error);
+    }
+  }
+
+  return {
+    ...item,
+    displayDate: formatDisplayDate(item.date),
+    durationText: durationSeconds > 0 ? formatTime(durationSeconds) : '—',
+    partyResults,
+    ballsText:
+      typeof item.balls1 === 'number' || typeof item.balls2 === 'number'
+        ? String(item.balls1 || 0) + ':' + String(item.balls2 || 0)
+        : '—'
+  };
+}
+
+async function loadMatchStatsReport() {
+  refs.matchStatsError.textContent = '';
+
+  const player1 = normalizeName(refs.statsPlayer1Input.value);
+  const player2 = normalizeName(refs.statsPlayer2Input.value);
+
+  if (!player1) {
+    refs.matchStatsError.textContent = 'Введите Игрока 1.';
+    return;
+  }
+
+  if (player2 && player1.toLowerCase() === player2.toLowerCase()) {
+    refs.matchStatsError.textContent = 'Имена игроков должны отличаться.';
+    return;
+  }
+
+  refs.loadMatchStatsBtn.disabled = true;
+  refs.loadMatchStatsBtn.textContent = 'Загрузка...';
+  refs.matchStatsMetaText.textContent = 'Получаем статистику матчей из базы...';
+  refs.matchStatsMetaText.classList.remove('is-success', 'is-warning', 'is-error');
+
+  try {
+    const result = await getMatchStats({
+      player1,
+      player2,
+      period: state.matchStatsPeriod
+    });
+
+    state.matchStatsResults = Array.isArray(result.matches)
+      ? result.matches.map(prepareMatchStatsItem)
+      : [];
+    state.selectedMatchStatsId = null;
+
+    refs.matchStatsMetaText.textContent =
+      result.metaText ||
+      (state.matchStatsResults.length
+        ? 'Найдено матчей: ' + state.matchStatsResults.length + '. Нажмите на строку, чтобы увидеть детали.'
+        : 'По выбранному фильтру матчей не найдено.');
+
+    renderMatchStatsResults();
+  } catch (error) {
+    state.matchStatsResults = [];
+    state.selectedMatchStatsId = null;
+    renderMatchStatsResults();
+    refs.matchStatsError.textContent =
+      error instanceof Error ? error.message : 'Не удалось загрузить статистику матчей.';
+    refs.matchStatsMetaText.textContent = 'Проверьте Apps Script и подключение к Google Sheets.';
+    refs.matchStatsMetaText.classList.add('is-warning');
+  } finally {
+    refs.loadMatchStatsBtn.disabled = false;
+    refs.loadMatchStatsBtn.textContent = 'Показать';
+  }
+}
+
 function renderStatistics() {
   const list = refs.statsList;
   const empty = refs.statsEmptyState;
@@ -592,6 +983,11 @@ function renderStatistics() {
 
 function openStatsScreen() {
   renderStatistics();
+  updateStatsModeUI();
+  updateStatsReportUI();
+  updateMatchStatsInputsState();
+  updateMatchStatsPeriodUI();
+  renderMatchStatsResults();
   refs.gameScreen.classList.add('hidden');
   refs.statsScreen.classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -627,6 +1023,21 @@ function createStatisticsEntry(payload) {
   saveStatistics(state.statistics);
   renderStatistics();
 
+  void upsertPlayers([entry.player1, entry.player2])
+    .then(() => {
+      [entry.player1, entry.player2].forEach((name) => {
+        const normalizedName = normalizeName(name);
+        if (!normalizedName) return;
+
+        state.playerLookupCache[getLookupCacheKey(normalizedName)] = {
+          exists: true,
+          name: normalizedName
+        };
+      });
+    })
+    .catch((error) => {
+      console.warn('Не удалось обновить базу игроков:', error);
+    });
   enqueueStatisticsSync(entry);
   void syncPendingStatistics();
 }
@@ -1016,6 +1427,8 @@ function saveSetResult() {
     balls2: score2,
     frameCount: 1,
     durationSeconds: setDuration,
+    partyResults: [],
+    partyResultsJson: '[]',
     targetKind: null,
     targetValue: null
   });
@@ -1051,6 +1464,10 @@ function saveFrameResult() {
 
   const scoreText = wins1 + ':' + wins2 + ' (' + balls1 + ':' + balls2 + ')';
   const totalDuration = state.frameRows.reduce((sum, row) => sum + Number(row.time || 0), 0);
+  const partyResults = state.frameRows.map((row) => ({
+    score: String(row.score1) + ':' + String(row.score2),
+    durationSeconds: Number(row.time || 0)
+  }));
 
   createStatisticsEntry({
     players: state.player1 + ' vs ' + state.player2,
@@ -1070,6 +1487,8 @@ function saveFrameResult() {
     balls2,
     frameCount: state.frameRows.length,
     durationSeconds: totalDuration,
+    partyResults,
+    partyResultsJson: JSON.stringify(partyResults),
     targetKind: state.type === 'frame' && state.frameTarget ? state.frameTarget.kind : null,
     targetValue: state.type === 'frame' && state.frameTarget ? state.frameTarget.value : null
   });
@@ -1457,12 +1876,22 @@ function bindEvents() {
     validateInputs(false);
     updateTimerCardState();
     persistSession();
+    queuePlayerLookup({
+      inputRef: 'player1Input',
+      statusRef: 'player1LookupStatus',
+      mode: 'game'
+    });
   });
 
   refs.player2Input.addEventListener('input', () => {
     validateInputs(false);
     updateTimerCardState();
     persistSession();
+    queuePlayerLookup({
+      inputRef: 'player2Input',
+      statusRef: 'player2LookupStatus',
+      mode: 'game'
+    });
   });
 
   refs.gameSegments.addEventListener('click', (event) => {
@@ -1586,12 +2015,68 @@ function bindEvents() {
   refs.goStatsBtn.addEventListener('click', openStatsScreen);
   refs.backToGameBtn.addEventListener('click', openGameScreen);
 
+  refs.statsModeSegments.addEventListener('click', (event) => {
+    const button = event.target.closest('.segment[data-stats-mode]');
+    if (!button) return;
+    state.statsMode = button.dataset.statsMode;
+    updateStatsModeUI();
+  });
+
+  refs.statsReportSegments.addEventListener('click', (event) => {
+    const button = event.target.closest('.segment[data-report]');
+    if (!button) return;
+    state.statsReport = button.dataset.report;
+    updateStatsReportUI();
+  });
+
+  refs.statsPlayer1Input.addEventListener('input', () => {
+    updateMatchStatsInputsState();
+    setStatsLookupMessage('statsPlayer1Status', '', '');
+    queuePlayerLookup({
+      inputRef: 'statsPlayer1Input',
+      statusRef: 'statsPlayer1Status',
+      mode: 'stats'
+    });
+  });
+
+  refs.statsPlayer2Input.addEventListener('input', () => {
+    setStatsLookupMessage('statsPlayer2Status', '', '');
+    queuePlayerLookup({
+      inputRef: 'statsPlayer2Input',
+      statusRef: 'statsPlayer2Status',
+      mode: 'stats'
+    });
+  });
+
+  refs.statsPeriodSegments.addEventListener('click', (event) => {
+    const button = event.target.closest('.segment[data-period]');
+    if (!button) return;
+    state.matchStatsPeriod = button.dataset.period;
+    updateMatchStatsPeriodUI();
+  });
+
+  refs.loadMatchStatsBtn.addEventListener('click', () => {
+    void loadMatchStatsReport();
+  });
+
+  refs.matchStatsList.addEventListener('click', (event) => {
+    const card = event.target.closest('.stats-item[data-match-id]');
+    if (!card) return;
+    setSelectedMatchStats(card.dataset.matchId);
+  });
+
+  refs.matchStatsDetail.addEventListener('click', () => {
+    if (!state.selectedMatchStatsId) return;
+    state.selectedMatchStatsId = null;
+    renderMatchStatsResults();
+  });
+
   refs.clearStatsBtn.addEventListener('click', () => {
-    openConfirmModal('Очистить статистику', 'Все сохранённые записи будут удалены. Продолжить?', () => {
+    openConfirmModal('Очистить историю', 'Все локальные записи на этом устройстве будут удалены. Продолжить?', () => {
       state.statistics = [];
       clearStatisticsStorage();
       renderStatistics();
-      showToast('Статистика очищена.');
+      showToast('Локальная история очищена.');
     });
   });
 
@@ -1630,6 +2115,11 @@ function bindEvents() {
 function init() {
   state.statistics = loadStatistics();
   renderStatistics();
+  updateStatsModeUI();
+  updateStatsReportUI();
+  updateMatchStatsInputsState();
+  updateMatchStatsPeriodUI();
+  renderMatchStatsResults();
   updateGameSelectionUI();
   updateTypeAvailability();
   updateTypeSelectionUI();
@@ -1637,6 +2127,16 @@ function init() {
   restoreSession();
   updateTimerDisplay();
   updateTimerCardState();
+  queuePlayerLookup({
+    inputRef: 'player1Input',
+    statusRef: 'player1LookupStatus',
+    mode: 'game'
+  });
+  queuePlayerLookup({
+    inputRef: 'player2Input',
+    statusRef: 'player2LookupStatus',
+    mode: 'game'
+  });
   bindEvents();
   void syncPendingStatistics();
 
